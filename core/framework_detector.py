@@ -75,7 +75,7 @@ def generate_snippet(framework, bot_id="42", api_key="USER_API_KEY", bot_name="A
 <script>
 (function(){{
   var s = document.createElement("script");
-  s.src = "http://127.0.0.1:8000/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
+  s.src = "https://geminichatx.flourishdigital.in/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
   document.body.appendChild(s);
 }})();
 </script>
@@ -91,7 +91,7 @@ import {{ useEffect }} from "react";
 export default function ChatbotWidget() {{
   useEffect(() => {{
     const s = document.createElement("script");
-    s.src = "http://127.0.0.1:8000/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
+    s.src = "https://geminichatx.flourishdigital.in/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
     document.body.appendChild(s);
     
     return () => {{
@@ -123,7 +123,7 @@ export default {{
   name: 'ChatbotWidget',
   mounted() {{
     const s = document.createElement("script");
-    s.src = "http://127.0.0.1:8000/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
+    s.src = "https://geminichatx.flourishdigital.in/static/chatbot.js?bot_id={bot_id}&api_key={api_key}&bot_name={bot_name.replace(' ', '+')}";
     document.body.appendChild(s);
   }},
   beforeUnmount() {{
