@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot Management Dashboard</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <!-- Configure Tailwind to use Inter font and custom colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#60a5fa',
+                        'accent': '#34d399',
+                        'voice': '#8b5cf6', // Purple for voice bot
+                        'dark-bg': '#1f2937',
+                        'card-bg': '#374151',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Load Lucide icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            background-color: #1f2937; /* dark-bg */
+            font-family: 'Inter', sans-serif;
+        }
+        .page-content {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .page-content.active {
+            display: block;
+            opacity: 1;
+        }
+        .step-card {
+            background-color: #374151; /* card-bg */
+            border: 1px solid #4b5563;
+        }
+        .api-key-container input[type="text"] {
+            font-family: monospace;
+            padding-right: 3rem; /* Space for the eye icon */
+        }
+        .loading-animation {
+            border-top-color: #4f46e5;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .bot-card {
+            transition: all 0.3s ease;
+        }
+        .bot-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        /* Custom styles for code display */
+        .code-container {
+            background-color: #1a1a1a;
+            border-radius: 0.5rem;
+            border: 1px solid #374151;
+            overflow: hidden;
+        }
+        .code-header {
+            background-color: #2d2d2d;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #374151;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .code-language {
+            color: #e5e7eb;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .code-content {
+            padding: 1rem;
+            margin: 0;
+            overflow-x: auto;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        .code-content code {
+            background: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        /* Override prism background */
+        pre[class*="language-"] {
+            background: #1a1a1a !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+        }
+        /* Chat interface styles */
+        .chat-message {
+            max-width: 80%;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+        }
+        .user-message {
+            background-color: #4f46e5;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #374151;
+            color: #e5e7eb;
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+        }
+        /* Voice call analytics styles */
+        .sentiment-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .sentiment-interested {
+            background-color: #10b98120;
+            color: #10b981;
+        }
+        .sentiment-not-interested {
+            background-color: #ef444420;
+            color: #ef4444;
+        }
+        .sentiment-angry {
+            background-color: #dc262620;
+            color: #dc2626;
+        }
+        .sentiment-satisfied {
+            background-color: #3b82f620;
+            color: #3b82f6;
+        }
+        .sentiment-request-callback {
+            background-color: #8b5cf620;
+            color: #8b5cf6;
+        }
+        .sentiment-neutral {
+            background-color: #6b728020;
+            color: #6b7280;
+        }
+        /* Step indicator styles */
+        .step-indicator {
+            transition: all 0.3s ease;
+        }
+        .step-indicator.active {
+            background-color: #4f46e5;
+            color: white;
+            transform: scale(1.1);
+        }
+        .step-indicator.inactive {
+            background-color: #4b5563;
+            color: #9ca3af;
+        }
+        .step-indicator.completed {
+            background-color: #10b981;
+            color: white;
+        }
+        .step-content {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <!-- Global State & Configuration -->
+    <script>
+        // Set the backend host URL
+        const API_HOST = "http://127.0.0.1:8000/api/v1";
+
+        const state = {
+            platform: null, // 'website' or 'whatsapp' or 'voice'
+            bot: {
+                id: null,
+                name: "Unassigned Bot",
+                apiKey: null,
+                companyName: "",
+                language: "en-IN",
+                voiceType: "WOMAN",
+                fallbackResponse: "Sorry, I don't know the answer to that.",
+                welcomeMessage: "Hello! This is your AI assistant calling. How can I help you today?"
+            },
+            isAuthenticated: false,
+            currentView: 'dashboard',
+            existingBots: [],
+            chatHistory: [],
+            callAnalytics: [],
+            supportedLanguages: ['en-IN', 'en-US', 'en-GB', 'fr-FR', 'de-DE', 'es-ES', 'it-IT'],
+            voiceTypes: ['MAN', 'WOMAN'],
+            voiceAvailability: {
+                'en-IN': ['MAN', 'WOMAN'],
+                'en-US': ['MAN', 'WOMAN'],
+                'en-GB': ['MAN', 'WOMAN'],
+                'fr-FR': ['WOMAN'],
+                'de-DE': ['WOMAN'],
+                'es-ES': ['WOMAN'],
+                'it-IT': ['WOMAN']
+            },
+            // Track completed steps for each platform
+            completedSteps: {
+                website: [],
+                whatsapp: [],
+                voice: []
+            }
+        };
+
+        // --- Utility Functions ---
+
+        /** Shows a temporary toast notification. */
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgColor = 'bg-green-500';
+            if (type === 'error') bgColor = 'bg-red-600';
+            if (type === 'info') bgColor = 'bg-blue-500';
+            if (type === 'loading') bgColor = 'bg-primary';
+
+            toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl text-white ${bgColor} transform transition-all duration-300 translate-y-full opacity-0`;
+            toast.innerHTML = `${type === 'loading' ? '<div class="loading-animation w-5 h-5 border-2 border-white border-solid rounded-full inline-block mr-2"></div>' : ''} ${message}`;
+
+            toastContainer.appendChild(toast);
+            
+            // Show animation
+            setTimeout(() => {
+                toast.classList.remove('translate-y-full', 'opacity-0');
+            }, 10);
+
+            // Hide after 4 seconds unless it's a permanent error/loading state
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    toast.classList.add('translate-y-full', 'opacity-0');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }, 4000);
+            }
+
+            return {
+                update: (newMessage, newType = 'success') => {
+                    let newBgColor = 'bg-green-500';
+                    if (newType === 'error') newBgColor = 'bg-red-600';
+                    if (newType === 'info') newBgColor = 'bg-blue-500';
+                    if (newType === 'loading') newBgColor = 'bg-primary';
+
+                    toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl text-white transform transition-all duration-300 ${newBgColor}`;
+                    toast.innerHTML = `${newType === 'loading' ? '<div class="loading-animation w-5 h-5 border-2 border-white border-solid rounded-full inline-block mr-2"></div>' : ''} ${newMessage}`;
+
+                    if (newType !== 'loading') {
+                        setTimeout(() => {
+                            toast.classList.add('translate-y-full', 'opacity-0');
+                            toast.addEventListener('transitionend', () => toast.remove());
+                        }, 4000);
+                    }
+                },
+                remove: () => {
+                    toast.classList.add('translate-y-full', 'opacity-0');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }
+            };
+        }
+
+        /** Utility for copying text to clipboard. */
+        function copyText(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Copied to clipboard!', 'info');
+                }).catch(err => {
+                    console.error('Could not copy text: ', err);
+                    showToast('Failed to copy. See console for error.', 'error');
+                });
+            } else {
+                showToast('Clipboard API not supported by your browser.', 'error');
+            }
+        }
+
+        /** Renders the main bot header with ID and keys. */
+        function renderBotHeader() {
+            const header = document.getElementById('bot-details-header');
+            if (!header) return;
+
+            const name = state.bot.name;
+            const id = state.bot.id;
+            const key = state.bot.apiKey;
+            const keyLabel = state.platform === 'voice' ? 'Voice API Key' : 'API Key';
+            const keyId = 'bot-api-key';
+
+            if (id === null) {
+                 header.innerHTML = `
+                    <p class="text-xl font-bold text-gray-300">${name}</p>
+                    <p class="text-sm text-gray-400">Bot ID: N/A | Status: Not Created</p>
+                `;
+                return;
+            }
+
+            header.innerHTML = `
+                <div class="flex items-center space-x-4">
+                    <p class="text-xl font-bold ${state.platform === 'voice' ? 'text-voice' : state.platform === 'website' ? 'text-primary' : 'text-accent'}">${name}</p>
+                    <p class="text-sm text-gray-400">ID: ${id}</p>
+                    ${state.platform === 'voice' ? `<p class="text-sm text-gray-400">Company: ${state.bot.companyName || 'N/A'}</p>` : ''}
+                </div>
+                <div class="mt-2 sm:mt-0 flex items-center space-x-2">
+                    <span class="text-sm font-medium text-gray-400">${keyLabel}:</span>
+                    <div class="relative api-key-container">
+                        <input type="text" id="${keyId}" value="${key || 'Pending...'}" readonly class="w-full sm:w-64 p-2 text-sm text-white bg-card-bg border border-gray-600 rounded-md focus:ring-primary focus:border-primary transition duration-150" style="-webkit-text-security: disc;">
+                        <button onclick="toggleKeyVisibility('${keyId}', this); return false;" class="absolute inset-y-0 right-0 p-2 text-gray-400 hover:text-white" title="Toggle visibility">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <button onclick="copyText(document.getElementById('${keyId}').value); return false;" class="p-2 text-gray-400 hover:text-primary rounded-md" title="Copy to clipboard">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
+                    </button>
+                    ${state.platform === 'website' || state.platform === 'voice' ? `
+                    <button onclick="regenerateApiKey(); return false;" class="p-2 text-gray-400 hover:text-yellow-500 rounded-md" title="Regenerate API Key">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                    ` : ''}
+                </div>
+            `;
+            // Re-render lucide icons after injecting HTML
+            lucide.createIcons();
+        }
+
+        /** Toggles the obscured text security for sensitive keys. */
+        function toggleKeyVisibility(inputId, buttonElement) {
+            const input = document.getElementById(inputId);
+            const icon = buttonElement.querySelector('i');
+            if (input.style.webkitTextSecurity === 'disc') {
+                input.style.webkitTextSecurity = 'none';
+                icon.innerHTML = lucide.createIcons()['eye-off'].toSvg();
+            } else {
+                input.style.webkitTextSecurity = 'disc';
+                icon.innerHTML = lucide.createIcons()['eye'].toSvg();
+            }
+        }
+
+        /** Handles navigation between pages/views. */
+        function showPage(pageId, platform = null) {
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.remove('active');
+            });
+            const newPage = document.getElementById(pageId);
+            if (newPage) {
+                newPage.classList.add('active');
+                state.currentView = pageId;
+
+                // Reset bot state if moving away from a setup page
+                if (pageId === 'dashboard') {
+                    state.bot.id = null;
+                    state.bot.name = "Unassigned Bot";
+                    state.bot.apiKey = null;
+                    state.bot.companyName = "";
+                    state.bot.language = "en-IN";
+                    state.bot.voiceType = "WOMAN";
+                    state.bot.fallbackResponse = "Sorry, I don't know the answer to that.";
+                    state.bot.welcomeMessage = "Hello! This is your AI assistant calling. How can I help you today?";
+                    state.platform = null;
+                    state.chatHistory = [];
+                    state.callAnalytics = [];
+                }
+
+                // If navigating to a setup page, set platform
+                if (platform) {
+                    state.platform = platform;
+                    // Load supported languages and voices for voice bot
+                    if (platform === 'voice') {
+                        loadSupportedLanguages();
+                    }
+                }
+
+                if (pageId === 'website_setup' || pageId === 'whatsapp_setup' || pageId === 'voice_setup') {
+                    // Update header and form initial values
+                    if (platform === 'voice') {
+                        document.getElementById('voice_fallback_input').value = state.bot.fallbackResponse;
+                        document.getElementById('voice_fallback_update_input').value = state.bot.fallbackResponse;
+                        document.getElementById('voice_welcome_message_input').value = state.bot.welcomeMessage;
+                        document.getElementById('voice_welcome_update_input').value = state.bot.welcomeMessage;
+                        document.getElementById('voice_language_select').value = state.bot.language;
+                        document.getElementById('voice_type_select').value = state.bot.voiceType;
+                        updateVoiceOptions();
+                    } else if (platform === 'website') {
+                        document.getElementById('fallback_response_input').value = state.bot.fallbackResponse;
+                        document.getElementById('fallback_update_input').value = state.bot.fallbackResponse;
+                    } else if (platform === 'whatsapp') {
+                        document.getElementById('whatsapp_fallback_response_input').value = state.bot.fallbackResponse;
+                        document.getElementById('whatsapp_fallback_update_input').value = state.bot.fallbackResponse;
+                    }
+                    
+                    renderBotHeader();
+                    
+                    // Clear chat history
+                    state.chatHistory = [];
+                    renderChatHistory();
+                    
+                    // Clear call analytics for voice bot
+                    if (platform === 'voice') {
+                        state.callAnalytics = [];
+                        renderCallAnalytics();
+                    }
+                    
+                    // Update step indicators
+                    updateStepIndicators(platform);
+                }
+                
+                // Load existing bots when dashboard is shown
+                if (pageId === 'dashboard') {
+                    loadExistingBots();
+                }
+            }
+        }
+
+        /** Update step indicators based on completed steps */
+        function updateStepIndicators(platform) {
+            if (!platform) return;
+            
+            // For website and voice, show all steps as available (not hidden)
+            if (platform === 'website' || platform === 'voice') {
+                // All steps are visible, we just update their status
+                const steps = document.querySelectorAll(`.${platform}-step`);
+                steps.forEach((step, index) => {
+                    const stepNumber = index + 1;
+                    const indicator = document.getElementById(`${platform}-step-${stepNumber}-indicator`);
+                    if (indicator) {
+                        if (state.completedSteps[platform].includes(stepNumber)) {
+                            indicator.className = indicator.className.replace('inactive', 'completed');
+                        } else if (stepNumber === 1) {
+                            indicator.className = indicator.className.replace('inactive', 'active');
+                        } else {
+                            indicator.className = indicator.className.replace('active completed', 'inactive');
+                        }
+                    }
+                });
+            }
+        }
+
+        /** Mark a step as completed */
+        function markStepCompleted(platform, stepNumber) {
+            if (!state.completedSteps[platform].includes(stepNumber)) {
+                state.completedSteps[platform].push(stepNumber);
+                updateStepIndicators(platform);
+            }
+        }
+
+        /** Load existing bots for the dashboard */
+        async function loadExistingBots() {
+            try {
+                const savedBots = localStorage.getItem('existingBots');
+                if (savedBots) {
+                    state.existingBots = JSON.parse(savedBots);
+                    renderExistingBots();
+                }
+            } catch (error) {
+                console.error('Error loading existing bots:', error);
+            }
+        }
+
+        /** Save a bot to the existing bots list */
+        function saveBotToDashboard(botData) {
+            const existingIndex = state.existingBots.findIndex(bot => bot.id === botData.id);
+            
+            if (existingIndex >= 0) {
+                state.existingBots[existingIndex] = {...state.existingBots[existingIndex], ...botData};
+            } else {
+                state.existingBots.push(botData);
+            }
+            
+            localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+            renderExistingBots();
+        }
+
+        /** Render existing bots in the dashboard */
+        function renderExistingBots() {
+            const container = document.getElementById('existing-bots-container');
+            if (!container) return;
+
+            if (state.existingBots.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full text-center py-8">
+                        <i data-lucide="bot" class="w-12 h-12 text-gray-500 mx-auto mb-4"></i>
+                        <p class="text-gray-400">No bots created yet. Create your first bot to get started!</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = state.existingBots.map(bot => `
+                <div class="bot-card step-card p-6 rounded-xl shadow-lg transition-all duration-300">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${bot.name}</h3>
+                            <p class="text-sm text-gray-400">ID: ${bot.id} | Type: ${bot.type}</p>
+                            ${bot.type === 'voice' ? `<p class="text-xs text-gray-500 mt-1">Company: ${bot.companyName || 'N/A'}</p>` : ''}
+                            <p class="text-xs text-gray-500 mt-1">Created: ${new Date(bot.createdAt || Date.now()).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="editBot('${bot.id}')" class="p-2 text-gray-400 hover:text-primary rounded-md" title="Edit Bot">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteBot('${bot.id}')" class="p-2 text-gray-400 hover:text-red-500 rounded-md" title="Delete Bot">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Status:</span>
+                            <span class="px-2 py-1 text-xs rounded-full ${bot.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
+                                ${bot.status || 'Active'}
+                            </span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Knowledge Base:</span>
+                            <span class="text-sm text-gray-400">${bot.documentsCount || 0} documents</span>
+                        </div>
+                        
+                        ${bot.type === 'voice' ? `
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Voice Type:</span>
+                            <span class="text-sm text-gray-400">${bot.voiceType || 'WOMAN'}</span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Language:</span>
+                            <span class="text-sm text-gray-400">${bot.language || 'en-IN'}</span>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="pt-3 border-t border-gray-600">
+                            <button onclick="quickUpdateKB('${bot.id}', '${bot.type}')" class="w-full bg-primary/20 text-primary hover:bg-primary/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150 mb-2">
+                                Update Knowledge Base
+                            </button>
+                            ${bot.type === 'website' ? `
+                                <button onclick="quickGenerateCode('${bot.id}')" class="w-full bg-accent/20 text-accent hover:bg-accent/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150 mb-2">
+                                    Generate Integration Code
+                                </button>
+                            ` : ''}
+                            ${bot.type === 'voice' ? `
+                                <button onclick="quickTestCall('${bot.id}')" class="w-full bg-voice/20 text-voice hover:bg-voice/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150 mb-2">
+                                    Test Call
+                                </button>
+                                <button onclick="quickViewAnalytics('${bot.id}')" class="w-full bg-secondary/20 text-secondary hover:bg-secondary/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150">
+                                    View Analytics
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+
+        /** Quick update knowledge base for an existing bot */
+        async function quickUpdateKB(botId, platform) {
+            showToast(`Opening knowledge base update for ${platform} bot ${botId}...`, 'info');
+            
+            if (platform === 'website') {
+                showPage('website_setup', 'website');
+            } else if (platform === 'whatsapp') {
+                showPage('whatsapp_setup', 'whatsapp');
+            } else if (platform === 'voice') {
+                showPage('voice_setup', 'voice');
+            }
+        }
+
+        /** Quick generate integration code for an existing website bot */
+        async function quickGenerateCode(botId) {
+            showToast(`Opening integration code generation for bot ${botId}...`, 'info');
+            showPage('website_setup', 'website');
+        }
+
+        /** Quick test call for voice bot */
+        async function quickTestCall(botId) {
+            showToast(`Opening test call for voice bot ${botId}...`, 'info');
+            showPage('voice_setup', 'voice');
+        }
+
+        /** Quick view analytics for voice bot */
+        async function quickViewAnalytics(botId) {
+            showToast(`Opening analytics for voice bot ${botId}...`, 'info');
+            showPage('voice_setup', 'voice');
+            // Load analytics for this bot
+            setTimeout(() => {
+                document.getElementById('load-analytics-btn').click();
+            }, 500);
+        }
+
+        /** Edit an existing bot */
+        function editBot(botId) {
+            const bot = state.existingBots.find(b => b.id === botId);
+            if (bot) {
+                showToast(`Editing ${bot.name}...`, 'info');
+                if (bot.type === 'website') {
+                    showPage('website_setup', 'website');
+                } else if (bot.type === 'whatsapp') {
+                    showPage('whatsapp_setup', 'whatsapp');
+                } else if (bot.type === 'voice') {
+                    showPage('voice_setup', 'voice');
+                }
+            }
+        }
+
+        /** Delete an existing bot */
+        function deleteBot(botId) {
+            if (confirm('Are you sure you want to delete this bot? This action cannot be undone.')) {
+                state.existingBots = state.existingBots.filter(bot => bot.id !== botId);
+                localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                renderExistingBots();
+                showToast('Bot deleted successfully', 'success');
+            }
+        }
+
+        /** Main function to fetch all bots and populate dashboard (simplified for frontend demo). */
+        function initDashboard() {
+            showPage('dashboard');
+            loadExistingBots();
+        }
+
+        // --- Voice Bot Specific Functions ---
+
+        /** Load supported languages for voice bot */
+        async function loadSupportedLanguages() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/supported-languages`);
+                if (response.ok) {
+                    const data = await response.json();
+                    state.supportedLanguages = data.languages || state.supportedLanguages;
+                    state.voiceAvailability = data.voice_availability || state.voiceAvailability;
+                    updateVoiceOptions();
+                }
+            } catch (error) {
+                console.error('Error loading supported languages:', error);
+            }
+        }
+
+        /** Update voice type options based on selected language */
+        function updateVoiceOptions() {
+            const languageSelect = document.getElementById('voice_language_select');
+            const voiceTypeSelect = document.getElementById('voice_type_select');
+            
+            if (!languageSelect || !voiceTypeSelect) return;
+            
+            const selectedLanguage = languageSelect.value;
+            const availableVoices = state.voiceAvailability[selectedLanguage] || ['WOMAN'];
+            
+            // Update voice type options
+            voiceTypeSelect.innerHTML = '';
+            availableVoices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice;
+                option.textContent = voice;
+                voiceTypeSelect.appendChild(option);
+            });
+            
+            // Set default voice type if current selection is not available
+            if (!availableVoices.includes(state.bot.voiceType)) {
+                state.bot.voiceType = availableVoices[0];
+                voiceTypeSelect.value = availableVoices[0];
+            } else {
+                voiceTypeSelect.value = state.bot.voiceType;
+            }
+        }
+
+        // --- Core API Handlers ---
+
+        /** Step 1: Create a new Bot (Website or WhatsApp) */
+        async function createBot(platform) {
+            event.preventDefault();
+            
+            let name, fallback, access_token;
+
+            if (platform === 'website') {
+                name = document.getElementById('bot_name_input').value.trim();
+                fallback = document.getElementById('fallback_response_input').value.trim();
+                access_token = null;
+            } else {
+                name = document.getElementById('whatsapp_bot_name_input').value.trim();
+                fallback = document.getElementById('whatsapp_fallback_response_input').value.trim();
+                access_token = document.getElementById('whatsapp_access_token_input').value.trim();
+            }
+
+            if (!name) {
+                return showToast('Bot name is required.', 'error');
+            }
+
+            const toast = showToast(`Creating ${platform} bot...`, 'loading');
+
+            const payload = { 
+                name: name, 
+                fallback_response: fallback || "Sorry, I don't know the answer to that."
+            };
+
+            try {
+                let endpoint;
+                if (platform === 'website') {
+                    endpoint = `${API_HOST}/bots/website/create-bot`;
+                } else {
+                    endpoint = `${API_HOST}/bots/whatsapp/create-bot`;
+                    payload.access_token = access_token;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update state with bot details
+                state.bot.id = data.bot_id;
+                state.bot.name = name;
+                state.bot.fallbackResponse = fallback;
+                
+                if (platform === 'website') {
+                    state.bot.apiKey = data.api_key;
+                    state.bot.accessToken = null;
+                } else {
+                    state.bot.accessToken = access_token;
+                    state.bot.apiKey = null;
+                }
+
+                // Save to dashboard
+                saveBotToDashboard({
+                    id: data.bot_id,
+                    name: name,
+                    type: platform,
+                    status: 'active',
+                    createdAt: new Date().toISOString(),
+                    documentsCount: 0
+                });
+
+                // Update UI
+                renderBotHeader();
+                
+                // Mark step as completed
+                markStepCompleted(platform, 1);
+
+                toast.update(`Successfully created ${name} (ID: ${data.bot_id})! Proceed to the next step.`, 'success');
+
+            } catch (error) {
+                console.error('Bot creation failed:', error);
+                toast.update(`Failed to create bot. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 2 (Website/WhatsApp): Upload documents or URL to knowledge base. */
+        async function uploadKnowledgeBase() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            let url, files;
+            if (state.platform === 'website') {
+                url = document.getElementById('kb_url_input').value.trim();
+                files = document.getElementById('kb_file_input').files;
+            } else {
+                url = document.getElementById('whatsapp_kb_url_input').value.trim();
+                files = document.getElementById('whatsapp_kb_file_input').files;
+            }
+
+            if (!url && files.length === 0) {
+                return showToast('Please provide a website URL or select files to upload.', 'error');
+            }
+
+            const toast = showToast('Uploading knowledge base...', 'loading');
+            const formData = new FormData();
+            
+            if (url) {
+                formData.append('website_url', url);
+            }
+            if (files.length > 0) {
+                for (const file of files) {
+                    formData.append('files', file);
+                }
+            }
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/${state.platform}/${state.bot.id}/upload_docs`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update bot in dashboard with new document count
+                const botIndex = state.existingBots.findIndex(bot => bot.id === state.bot.id);
+                if (botIndex >= 0) {
+                    state.existingBots[botIndex].documentsCount = (state.existingBots[botIndex].documentsCount || 0) + data.sources.length;
+                    localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                    renderExistingBots();
+                }
+                
+                // Mark step as completed
+                markStepCompleted(state.platform, 2);
+                
+                toast.update(`Knowledge base updated! ${data.message}`, 'success');
+                
+                // Clear inputs
+                if (state.platform === 'website') {
+                    document.getElementById('kb_url_input').value = '';
+                    document.getElementById('kb_file_input').value = '';
+                } else {
+                    document.getElementById('whatsapp_kb_url_input').value = '';
+                    document.getElementById('whatsapp_kb_file_input').value = '';
+                }
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                toast.update(`Failed to upload documents. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 3 (Website/WhatsApp): Update the bot's fallback response. */
+        async function updateFallbackResponse() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            let newFallback;
+            if (state.platform === 'website') {
+                newFallback = document.getElementById('fallback_update_input').value.trim();
+            } else {
+                newFallback = document.getElementById('whatsapp_fallback_update_input').value.trim();
+            }
+
+            if (!newFallback) {
+                return showToast('Fallback response cannot be empty.', 'error');
+            }
+            if (newFallback === state.bot.fallbackResponse) {
+                return showToast('Fallback response is already set to this value.', 'info');
+            }
+
+            const toast = showToast('Updating fallback response...', 'loading');
+            const url = `${API_HOST}/bots/${state.platform}/${state.bot.id}/fallback`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fallback_response: newFallback })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                state.bot.fallbackResponse = data.fallback_response;
+                
+                // Mark step as completed
+                markStepCompleted(state.platform, 3);
+                
+                toast.update('Fallback response updated successfully!', 'success');
+
+            } catch (error) {
+                console.error('Fallback update failed:', error);
+                toast.update(`Failed to update fallback. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 4 (Website Only): Generate integration code. */
+        async function generateIntegrationCode() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a website bot first.', 'error');
+            }
+            
+            const websiteUrl = document.getElementById('integration_url_input').value.trim();
+            const outputDiv = document.getElementById('integration_code_output');
+
+            if (!websiteUrl) {
+                return showToast('Please enter the website URL for integration analysis.', 'error');
+            }
+
+            const toast = showToast('Analyzing website and generating code...', 'loading');
+            outputDiv.innerHTML = '<div class="flex items-center justify-center p-8"><div class="loading-animation w-8 h-8 border-4 border-primary border-solid rounded-full"></div><span class="ml-3 text-gray-400">Analyzing website...</span></div>';
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/${state.bot.id}/generate_integration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ website_url: websiteUrl })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                console.log('Backend response:', data);
+                
+                // Mark step as completed
+                markStepCompleted('website', 4);
+                
+                toast.update('Integration code generated!', 'success');
+
+                const framework = data.framework || 'HTML/CSS/JS';
+                const integrationType = data.integration_type || 'frontend';
+                const instructions = data.instructions || 'Paste this code in your application.';
+                const integrationCode = data.integration_code || '// No integration code generated';
+
+                outputDiv.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-700 rounded-lg">
+                            <p class="text-sm font-medium text-accent mb-2">Detected Framework: <span class="text-white">${framework}</span></p>
+                            <p class="text-sm font-medium text-accent mb-1">Integration Type:</p>
+                            <p class="text-sm text-white">${integrationType}</p>
+                            <p class="text-sm font-medium text-accent mb-1 mt-3">Instructions:</p>
+                            <p class="text-sm text-white">${instructions}</p>
+                        </div>
+                        
+                        <div class="code-container">
+                            <div class="code-header">
+                                <span class="code-language">${framework} Integration Code</span>
+                                <button onclick="copyText(this.nextElementSibling.querySelector('code').textContent); return false;" class="p-2 text-gray-400 hover:text-white rounded-md bg-gray-700/50" title="Copy code">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <pre class="code-content language-javascript"><code>${integrationCode}</code></pre>
+                        </div>
+                    </div>
+                `;
+                
+                // Apply syntax highlighting
+                Prism.highlightAllUnder(outputDiv);
+                lucide.createIcons();
+
+            } catch (error) {
+                console.error('Integration generation failed:', error);
+                outputDiv.innerHTML = `
+                    <div class="p-4 bg-red-900/20 border border-red-700 rounded-lg">
+                        <p class="text-red-400 font-medium">Failed to generate integration code</p>
+                        <p class="text-red-300 text-sm mt-1">Error: ${error.message}</p>
+                        <p class="text-gray-400 text-xs mt-2">Check the browser console for more details.</p>
+                    </div>
+                `;
+                toast.update(`Failed to generate code: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 5: Test the chatbot with enhanced functionality */
+        async function testChat() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            const messageInput = document.getElementById('chat_message_input');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                return showToast('Please enter a message to send.', 'error');
+            }
+
+            // Add user message to chat history
+            state.chatHistory.push({ type: 'user', content: message });
+            renderChatHistory();
+            
+            // Clear input
+            messageInput.value = '';
+
+            const toast = showToast('Processing your message...', 'loading');
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+
+                if (state.platform === 'website') {
+                    headers['api-key'] = state.bot.apiKey;
+                }
+
+                const response = await fetch(`${API_HOST}/bots/${state.platform}/${state.bot.id}/chat`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Add bot response to chat history
+                state.chatHistory.push({ type: 'bot', content: data.bot_response });
+                renderChatHistory();
+                
+                // Mark step as completed
+                markStepCompleted(state.platform, state.platform === 'website' ? 5 : 4);
+                
+                toast.update('Response received!', 'success');
+
+            } catch (error) {
+                console.error('Chat failed:', error);
+                state.chatHistory.push({ type: 'bot', content: 'Error: Failed to get response from bot.' });
+                renderChatHistory();
+                toast.update(`Failed to get response. Error: ${error.message}`, 'error');
+            }
+        }
+
+        /** Render chat history in the chat interface */
+        function renderChatHistory() {
+            const chatContainer = document.getElementById('chat_container');
+            if (!chatContainer) return;
+
+            if (state.chatHistory.length === 0) {
+                chatContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="message-square" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p>Start a conversation with your bot</p>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            chatContainer.innerHTML = state.chatHistory.map(msg => `
+                <div class="chat-message ${msg.type === 'user' ? 'user-message' : 'bot-message'}">
+                    <div class="flex items-start space-x-2">
+                        <div class="flex-shrink-0">
+                            ${msg.type === 'user' ? 
+                                '<i data-lucide="user" class="w-4 h-4"></i>' : 
+                                '<i data-lucide="bot" class="w-4 h-4"></i>'
+                            }
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm">${msg.content}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            lucide.createIcons();
+        }
+
+        /** Clear chat history */
+        function clearChatHistory() {
+            state.chatHistory = [];
+            renderChatHistory();
+            showToast('Chat history cleared', 'info');
+        }
+
+        /** Regenerate API key for website bot */
+        async function regenerateApiKey() {
+            if (state.bot.id === null || (state.platform !== 'website' && state.platform !== 'voice')) {
+                return showToast('This feature is only available for website and voice bots.', 'error');
+            }
+
+            if (!confirm('Are you sure you want to regenerate the API key? This will invalidate the current key.')) {
+                return;
+            }
+
+            const toast = showToast('Regenerating API key...', 'loading');
+
+            try {
+                const endpoint = state.platform === 'website' 
+                    ? `${API_HOST}/bots/website/${state.bot.id}/regenerate_api_key`
+                    : `${API_HOST}/bots/voice/${state.bot.id}/regenerate_api_key`;
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                state.bot.apiKey = data.new_api_key;
+                renderBotHeader();
+                
+                toast.update('API key regenerated successfully!', 'success');
+
+            } catch (error) {
+                console.error('API key regeneration failed:', error);
+                toast.update(`Failed to regenerate API key. Error: ${error.message}`, 'error');
+            }
+        }
+
+        /** Step 1 (WhatsApp Only): Start the Meta OAuth flow. */
+        async function startWhatsAppOAuth() {
+            event.preventDefault();
+            
+            const toast = showToast('Initiating WhatsApp API connection...', 'loading');
+            
+            const userId = 'canvas_user_123'; 
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/oauth/start?user_id=${userId}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+                const data = await response.json();
+                
+                toast.update('Redirecting to Meta for authentication...', 'info');
+                
+                // Simulate success and show next step
+                state.isAuthenticated = true;
+                document.getElementById('whatsapp-oauth-step').classList.add('opacity-50', 'pointer-events-none');
+                document.getElementById('whatsapp-creation-step').classList.remove('hidden');
+                document.getElementById('whatsapp-creation-step').classList.add('active');
+
+                toast.update('Simulated Meta OAuth Success! Proceed to Bot Creation.', 'success');
+                
+            } catch (error) {
+                console.error('OAuth initiation failed:', error);
+                toast.update(`Failed to start OAuth. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        // --- Voice Bot Specific API Handlers ---
+
+        /** Step 1: Create a new Voice Bot */
+        async function createVoiceBot() {
+            event.preventDefault();
+            
+            const name = document.getElementById('voice_bot_name_input').value.trim();
+            const companyName = document.getElementById('voice_company_name_input').value.trim();
+            const owner = document.getElementById('voice_owner_input')?.value.trim() || null;
+
+            if (!name) {
+                return showToast('Bot name is required.', 'error');
+            }
+            
+            if (!companyName) {
+                return showToast('Company name is required.', 'error');
+            }
+
+            const toast = showToast('Creating voice bot...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/create-bot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        company_name: companyName,
+                        owner: owner
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update state with bot details
+                state.bot.id = data.bot_id;
+                state.bot.name = name;
+                state.bot.companyName = companyName;
+                state.bot.apiKey = data.api_key;
+
+                // Save to dashboard
+                saveBotToDashboard({
+                    id: data.bot_id,
+                    name: name,
+                    companyName: companyName,
+                    type: 'voice',
+                    status: 'active',
+                    createdAt: new Date().toISOString(),
+                    documentsCount: 0,
+                    language: state.bot.language,
+                    voiceType: state.bot.voiceType
+                });
+
+                // Update UI
+                renderBotHeader();
+                
+                // Mark step as completed
+                markStepCompleted('voice', 1);
+
+                toast.update(`Successfully created ${name} (ID: ${data.bot_id})! Proceed to upload knowledge base.`, 'success');
+
+            } catch (error) {
+                console.error('Voice bot creation failed:', error);
+                toast.update(`Failed to create voice bot. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 2: Upload documents or URL to voice bot knowledge base. */
+        async function uploadVoiceKnowledgeBase() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const url = document.getElementById('voice_kb_url_input').value.trim();
+            const files = document.getElementById('voice_kb_file_input').files;
+
+            if (!url && files.length === 0) {
+                return showToast('Please provide a website URL or select files to upload.', 'error');
+            }
+
+            const toast = showToast('Uploading knowledge base...', 'loading');
+            const formData = new FormData();
+            
+            if (url) {
+                formData.append('website_url', url);
+            }
+            if (files.length > 0) {
+                for (const file of files) {
+                    formData.append('files', file);
+                }
+            }
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/upload_docs`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update bot in dashboard with new document count
+                const botIndex = state.existingBots.findIndex(bot => bot.id === state.bot.id);
+                if (botIndex >= 0) {
+                    state.existingBots[botIndex].documentsCount = (state.existingBots[botIndex].documentsCount || 0) + (data.sources ? data.sources.length : 0);
+                    localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                    renderExistingBots();
+                }
+                
+                // Mark step as completed
+                markStepCompleted('voice', 2);
+                
+                toast.update(`Knowledge base updated! ${data.message}`, 'success');
+                
+                // Clear inputs
+                document.getElementById('voice_kb_url_input').value = '';
+                document.getElementById('voice_kb_file_input').value = '';
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                toast.update(`Failed to upload documents. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 3: Configure voice settings */
+        async function configureVoiceSettings() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const language = document.getElementById('voice_language_select').value;
+            const voiceType = document.getElementById('voice_type_select').value;
+            const fallbackResponse = document.getElementById('voice_fallback_input').value.trim();
+            const welcomeMessage = document.getElementById('voice_welcome_message_input').value.trim();
+
+            if (!fallbackResponse) {
+                return showToast('Fallback response is required.', 'error');
+            }
+            
+            if (!welcomeMessage) {
+                return showToast('Welcome message is required.', 'error');
+            }
+
+            const toast = showToast('Configuring voice settings...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/configure-voice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        language: language,
+                        voice_type: voiceType,
+                        fallback_response: fallbackResponse,
+                        outbound_welcome_message: welcomeMessage
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update state
+                state.bot.language = language;
+                state.bot.voiceType = voiceType;
+                state.bot.fallbackResponse = fallbackResponse;
+                state.bot.welcomeMessage = welcomeMessage;
+                
+                // Update bot in dashboard
+                const botIndex = state.existingBots.findIndex(bot => bot.id === state.bot.id);
+                if (botIndex >= 0) {
+                    state.existingBots[botIndex].language = language;
+                    state.existingBots[botIndex].voiceType = voiceType;
+                    localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                    renderExistingBots();
+                }
+                
+                // Mark step as completed
+                markStepCompleted('voice', 3);
+
+                toast.update('Voice configuration updated successfully!', 'success');
+
+            } catch (error) {
+                console.error('Voice configuration failed:', error);
+                toast.update(`Failed to configure voice settings. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 4: Test voice bot with a call */
+        async function testVoiceCall() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const testPhoneNumber = document.getElementById('test_phone_input').value.trim();
+            const testMessage = document.getElementById('test_message_input').value.trim() || "Hello! This is a test call from your voice bot. How can I assist you today?";
+
+            if (!testPhoneNumber) {
+                return showToast('Test phone number is required.', 'error');
+            }
+
+            const toast = showToast('Initiating test call...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/test-call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        test_phone_number: testPhoneNumber,
+                        test_message: testMessage
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Mark step as completed
+                markStepCompleted('voice', 4);
+                
+                toast.update(`Test call initiated to ${testPhoneNumber}! Call ID: ${data.call_id || 'N/A'}`, 'success');
+
+            } catch (error) {
+                console.error('Test call failed:', error);
+                toast.update(`Failed to initiate test call. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 5: Make bulk calls */
+        async function makeBulkCalls() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const bulkMethod = document.querySelector('input[name="bulk_method"]:checked').value;
+            let recipientData = [];
+
+            if (bulkMethod === 'manual') {
+                const recipientsText = document.getElementById('manual_recipients_input').value.trim();
+                if (!recipientsText) {
+                    return showToast('Please enter recipient data.', 'error');
+                }
+                
+                try {
+                    // Parse JSON or comma-separated values
+                    if (recipientsText.startsWith('[')) {
+                        recipientData = JSON.parse(recipientsText);
+                    } else {
+                        // Parse as comma-separated values
+                        const lines = recipientsText.split('\n');
+                        recipientData = lines.map(line => {
+                            const parts = line.split(',');
+                            return {
+                                name: parts[0]?.trim() || '',
+                                number: parts[1]?.trim() || ''
+                            };
+                        }).filter(entry => entry.number);
+                    }
+                } catch (error) {
+                    return showToast('Invalid recipient data format. Use JSON or comma-separated values.', 'error');
+                }
+            } else {
+                const fileInput = document.getElementById('excel_file_input');
+                if (fileInput.files.length === 0) {
+                    return showToast('Please select an Excel file.', 'error');
+                }
+                // In a real implementation, we would upload the file
+                return showToast('Excel file upload would be processed here in real implementation.', 'info');
+            }
+
+            if (recipientData.length === 0) {
+                return showToast('No valid recipients found.', 'error');
+            }
+
+            const toast = showToast(`Initiating ${recipientData.length} calls...`, 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/bulk-call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        recipients: recipientData
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Mark step as completed
+                markStepCompleted('voice', 5);
+                
+                toast.update(`Successfully initiated ${data.recipients_processed || recipientData.length} calls!`, 'success');
+
+            } catch (error) {
+                console.error('Bulk call failed:', error);
+                toast.update(`Failed to initiate bulk calls. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 6: Load call analytics */
+        async function loadCallAnalytics() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const userNumber = document.getElementById('analytics_phone_filter')?.value.trim() || null;
+
+            const toast = showToast('Loading call analytics...', 'loading');
+
+            try {
+                const url = userNumber 
+                    ? `${API_HOST}/bots/voice/${state.bot.id}/call-analytics?user_number=${encodeURIComponent(userNumber)}`
+                    : `${API_HOST}/bots/voice/${state.bot.id}/call-analytics`;
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                state.callAnalytics = data.analytics || [];
+                
+                renderCallAnalytics();
+                
+                // Mark step as completed
+                markStepCompleted('voice', 6);
+                
+                toast.update(`Loaded ${state.callAnalytics.length} analytics records`, 'success');
+
+            } catch (error) {
+                console.error('Failed to load analytics:', error);
+                toast.update(`Failed to load call analytics. Error: ${error.message}`, 'error');
+            }
+        }
+
+        /** Render call analytics table */
+        function renderCallAnalytics() {
+            const container = document.getElementById('analytics_container');
+            if (!container) return;
+
+            if (state.callAnalytics.length === 0) {
+                container.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="bar-chart-3" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p>No call analytics data available</p>
+                            <p class="text-sm mt-2">Make some calls to see analytics here</p>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            const sentimentClassMap = {
+                'interested_in_product': 'sentiment-interested',
+                'not_interested': 'sentiment-not-interested',
+                'angry_customer': 'sentiment-angry',
+                'satisfied_customer': 'sentiment-satisfied',
+                'request_callback': 'sentiment-request-callback',
+                'neutral_inquiry': 'sentiment-neutral',
+                'no_speech': 'sentiment-neutral',
+                'analysis_failed': 'sentiment-neutral'
+            };
+
+            container.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-gray-400">
+                        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+                            <tr>
+                                <th class="px-6 py-3">Recipient</th>
+                                <th class="px-6 py-3">Phone Number</th>
+                                <th class="px-6 py-3">Sentiment</th>
+                                <th class="px-6 py-3">Confidence</th>
+                                <th class="px-6 py-3">Duration</th>
+                                <th class="px-6 py-3">Date</th>
+                                <th class="px-6 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.callAnalytics.map(item => `
+                                <tr class="border-b border-gray-700 hover:bg-gray-800/50">
+                                    <td class="px-6 py-4 font-medium text-white">${item.recipient_name || 'Unknown'}</td>
+                                    <td class="px-6 py-4">${item.recipient_number || 'N/A'}</td>
+                                    <td class="px-6 py-4">
+                                        <span class="sentiment-badge ${sentimentClassMap[item.sentiment_category] || 'sentiment-neutral'}">
+                                            ${item.sentiment_category?.replace(/_/g, ' ') || 'Unknown'}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">${(item.confidence_score * 100).toFixed(1)}%</td>
+                                    <td class="px-6 py-4">${item.call_duration || 0}s</td>
+                                    <td class="px-6 py-4">${new Date(item.created_at).toLocaleString()}</td>
+                                    <td class="px-6 py-4">
+                                        <button onclick="viewAnalyticsDetail(${JSON.stringify(item).replace(/"/g, '&quot;')})" class="text-primary hover:text-secondary" title="View Details">
+                                            <i data-lucide="eye" class="w-4 h-4"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            lucide.createIcons();
+        }
+
+        /** View analytics detail */
+        function viewAnalyticsDetail(item) {
+            const detailHtml = `
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-400">Recipient Name</p>
+                            <p class="text-white">${item.recipient_name || 'Unknown'}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Phone Number</p>
+                            <p class="text-white">${item.recipient_number || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Call UUID</p>
+                            <p class="text-white font-mono text-xs">${item.call_uuid || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Call Duration</p>
+                            <p class="text-white">${item.call_duration || 0} seconds</p>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-3 border-t border-gray-700">
+                        <p class="text-sm text-gray-400">Sentiment Analysis</p>
+                        <div class="mt-2 p-3 bg-gray-800 rounded-lg">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-white font-medium">${item.sentiment_category?.replace(/_/g, ' ') || 'Unknown'}</span>
+                                <span class="text-accent font-bold">${(item.confidence_score * 100).toFixed(1)}% confidence</span>
+                            </div>
+                            <p class="text-gray-300 text-sm">${item.analysis_reason || 'No reason provided'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-3 border-t border-gray-700">
+                        <p class="text-sm text-gray-400">Follow-up Action</p>
+                        <p class="text-white mt-1">${item.follow_up_action || 'No action suggested'}</p>
+                    </div>
+                    
+                    <div class="pt-3 border-t border-gray-700">
+                        <p class="text-sm text-gray-400">Call Date</p>
+                        <p class="text-white">${new Date(item.created_at).toLocaleString()}</p>
+                    </div>
+                </div>
+            `;
+            
+            // Show in a modal or alert
+            alert(`Call Analytics Details:\n\nRecipient: ${item.recipient_name}\nPhone: ${item.recipient_number}\nSentiment: ${item.sentiment_category}\nConfidence: ${(item.confidence_score * 100).toFixed(1)}%\nReason: ${item.analysis_reason}\nAction: ${item.follow_up_action}`);
+        }
+
+        /** Update voice configuration */
+        async function updateVoiceConfiguration() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a voice bot first.', 'error');
+            }
+
+            const newFallback = document.getElementById('voice_fallback_update_input').value.trim();
+            const newWelcome = document.getElementById('voice_welcome_update_input').value.trim();
+
+            if (!newFallback || !newWelcome) {
+                return showToast('Both fallback response and welcome message are required.', 'error');
+            }
+
+            if (newFallback === state.bot.fallbackResponse && newWelcome === state.bot.welcomeMessage) {
+                return showToast('No changes detected.', 'info');
+            }
+
+            const toast = showToast('Updating voice configuration...', 'loading');
+
+            try {
+                // In a real implementation, we would call an API endpoint
+                // For now, just update the local state
+                state.bot.fallbackResponse = newFallback;
+                state.bot.welcomeMessage = newWelcome;
+                
+                // Mark step as completed
+                markStepCompleted('voice', 7);
+                
+                toast.update('Voice configuration updated successfully!', 'success');
+
+            } catch (error) {
+                console.error('Update failed:', error);
+                toast.update(`Failed to update configuration. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Update voice options when language changes */
+        function onVoiceLanguageChange() {
+            updateVoiceOptions();
+        }
+
+        /** Toggle bulk method */
+        function toggleBulkMethod(method) {
+            document.getElementById('manual_recipients_section').classList.toggle('hidden', method !== 'manual');
+            document.getElementById('excel_upload_section').classList.toggle('hidden', method !== 'excel');
+        }
+
+        // --- Event Listeners and Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initDashboard();
+            lucide.createIcons(); // Initialize all icons on load
+        });
+    </script>
+
+    <!-- TOAST Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- MAIN APPLICATION CONTAINER -->
+    <div class="max-w-7xl mx-auto bg-dark-bg rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700">
+
+        <!-- Header and Navigation -->
+        <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 border-gray-700">
+            <h1 class="text-3xl font-extrabold text-white">Bot Deployment Console</h1>
+            <nav class="mt-4 sm:mt-0 space-x-2 flex">
+                <button onclick="showPage('dashboard')" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-600 transition duration-150 shadow-md">
+                    Dashboard
+                </button>
+                <button onclick="showPage('website_setup', 'website')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                    Website Bot
+                </button>
+                <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                    WhatsApp Bot
+                </button>
+                <button onclick="showPage('voice_setup', 'voice')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                    Voice Bot
+                </button>
+            </nav>
+        </header>
+
+        <!-- Bot Details Header (Top Right Slot) -->
+        <div id="bot-details-header" class="w-full p-4 mb-8 bg-gray-800 rounded-xl shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <!-- Content injected by renderBotHeader() -->
+            <p class="text-xl font-bold text-gray-300">Unassigned Bot</p>
+            <p class="text-sm text-gray-400 mt-2 sm:mt-0">Bot ID: N/A | Status: Not Created</p>
+        </div>
+
+
+        <!-- 1. DASHBOARD VIEW -->
+        <section id="dashboard" class="page-content active">
+            <h2 class="text-2xl font-semibold text-white mb-6">Welcome to the Bot Manager</h2>
+            
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div class="step-card p-6 rounded-xl shadow-lg hover:shadow-primary/50 transition duration-300">
+                    <i data-lucide="globe" class="w-8 h-8 text-primary mb-3"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Deploy a Website Chatbot</h3>
+                    <p class="text-gray-400 mb-4">Integrate an AI knowledge base directly into your web application to answer customer questions 24/7.</p>
+                    <button onclick="showPage('website_setup', 'website')" class="w-full bg-primary text-white py-2 rounded-lg hover:bg-indigo-600 transition duration-150">Start Website Bot Setup</button>
+                </div>
+                <div class="step-card p-6 rounded-xl shadow-lg hover:shadow-accent/50 transition duration-300">
+                    <i data-lucide="message-square" class="w-8 h-8 text-accent mb-3"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Deploy a WhatsApp Bot</h3>
+                    <p class="text-gray-400 mb-4">Connect your AI knowledge base to the WhatsApp Business API for instant, personalized messaging.</p>
+                    <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="w-full bg-accent text-dark-bg py-2 rounded-lg hover:bg-green-500 transition duration-150">Start WhatsApp Bot Setup</button>
+                </div>
+                <div class="step-card p-6 rounded-xl shadow-lg hover:shadow-voice/50 transition duration-300">
+                    <i data-lucide="phone" class="w-8 h-8 text-voice mb-3"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Deploy a Voice Bot</h3>
+                    <p class="text-gray-400 mb-4">Create AI-powered voice assistants for phone calls with sentiment analysis and call analytics.</p>
+                    <button onclick="showPage('voice_setup', 'voice')" class="w-full bg-voice text-white py-2 rounded-lg hover:bg-purple-600 transition duration-150">Start Voice Bot Setup</button>
+                </div>
+            </div>
+
+            <!-- Existing Bots Section -->
+            <div class="mt-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-semibold text-white">Your Chatbots</h2>
+                    <div class="text-sm text-gray-400">
+                        <span id="bot-count">${state.existingBots.length}</span> bot(s) created
+                    </div>
+                </div>
+                
+                <div id="existing-bots-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Dynamic content will be injected here by renderExistingBots() -->
+                    <div class="col-span-full text-center py-8">
+                        <i data-lucide="bot" class="w-12 h-12 text-gray-500 mx-auto mb-4"></i>
+                        <p class="text-gray-400">No bots created yet. Create your first bot to get started!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. WEBSITE BOT SETUP VIEW -->
+        <section id="website_setup" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">Website Bot Setup Flow</h2>
+            
+            <!-- Step Indicators -->
+            <div class="flex justify-between items-center mb-8 overflow-x-auto">
+                <div class="flex space-x-4">
+                    <div id="website-step-1-indicator" class="step-indicator active w-10 h-10 flex items-center justify-center rounded-full font-bold">1</div>
+                    <div id="website-step-2-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">2</div>
+                    <div id="website-step-3-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">3</div>
+                    <div id="website-step-4-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">4</div>
+                    <div id="website-step-5-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">5</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Bot Creation -->
+            <div class="step-card p-6 rounded-xl mb-6 website-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">1</span> Create Website Bot</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Bot Name:</span>
+                        <input type="text" id="bot_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="e.g., SupportBot-v1">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Initial Fallback Response (if no answer found):</span>
+                        <input type="text" id="fallback_response_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" value="Sorry, I don't know the answer to that." placeholder="e.g., Please contact support at...">
+                    </label>
+                    <button onclick="createBot('website'); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Create Bot & Get API Key
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Knowledge Base Upload -->
+            <div class="step-card p-6 rounded-xl mb-6 website-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">2</span> Upload Knowledge Base (Files or URL)</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Website URL (for crawling):</span>
+                        <input type="url" id="kb_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="https://yourcompany.com/docs">
+                    </label>
+                    <div class="text-gray-400 text-center">-- OR --</div>
+                    <label class="block">
+                        <span class="text-gray-300">Upload Documents (.pdf, .txt, .docx, .csv, .xlsx):</span>
+                        <input type="file" id="kb_file_input" multiple class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-indigo-600">
+                    </label>
+                    <button onclick="uploadKnowledgeBase(); return false;" class="w-full bg-accent text-dark-bg py-3 rounded-lg hover:bg-green-500 transition duration-150 font-bold">
+                        Process & Upload Docs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Update Fallback Response -->
+            <div class="step-card p-6 rounded-xl mb-6 website-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">3</span> Update Custom Fallback Response</h3>
+                <p class="text-sm text-gray-400 mb-3">Customize the response when the knowledge base cannot find a relevant answer.</p>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                    <input type="text" id="fallback_update_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="Enter new fallback response...">
+                    <button onclick="updateFallbackResponse(); return false;" class="bg-secondary text-white py-3 px-6 rounded-lg hover:bg-blue-500 transition duration-150 font-bold">
+                        Update
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Generate Integration Code -->
+            <div class="step-card p-6 rounded-xl mb-6 website-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">4</span> Generate Integration Code</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Your Website URL (for framework analysis):</span>
+                        <input type="url" id="integration_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="https://www.my-app.com">
+                    </label>
+                    <button onclick="generateIntegrationCode(); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Generate Code Snippet
+                    </button>
+                    <div id="integration_code_output" class="mt-4 p-4 bg-gray-800 rounded-lg min-h-[200px] flex items-center justify-center">
+                        <p class="text-gray-400">Enter URL above and click generate.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Test Enhanced Chatbot -->
+            <div class="step-card p-6 rounded-xl website-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">5</span> Test Enhanced Chatbot</h3>
+                <p class="text-sm text-gray-400 mb-4">Test your bot with the enhanced LLM-powered responses that use intent analysis and contextual retrieval.</p>
+                
+                <div class="chat-container bg-gray-800 rounded-lg p-4 mb-4" id="chat_container" style="height: 300px; overflow-y: auto;">
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="message-square" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p>Start a conversation with your bot</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <input type="text" id="chat_message_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="Type your message here..." onkeypress="if(event.key === 'Enter') testChat()">
+                    <button onclick="testChat(); return false;" class="bg-primary text-white py-3 px-6 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Send
+                    </button>
+                    <button onclick="clearChatHistory(); return false;" class="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 transition duration-150 font-bold" title="Clear chat history">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 3. WHATSAPP BOT SETUP VIEW -->
+        <section id="whatsapp_setup" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">WhatsApp Bot Setup Flow</h2>
+
+            <!-- Step 1: WhatsApp API Application (OAuth) -->
+            <div class="step-card p-6 rounded-xl mb-6">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">1</span> Apply for WhatsApp Business API</h3>
+                <p class="text-gray-400 mb-4">You need to connect your Meta/Facebook account to receive an Access Token for API communication.</p>
+                <button onclick="startWhatsAppOAuth(); return false;" class="w-full bg-accent text-dark-bg py-3 rounded-lg hover:bg-green-500 transition duration-150 font-bold">
+                    Start Meta / WhatsApp OAuth
+                </button>
+            </div>
+
+            <!-- Step 2: Bot Creation -->
+            <div class="step-card p-6 rounded-xl mb-6">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">2</span> Create WhatsApp Bot Instance</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Bot Name:</span>
+                        <input type="text" id="whatsapp_bot_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="e.g., WhatsApp-Support">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Meta Access Token (from Step 1):</span>
+                        <input type="text" id="whatsapp_access_token_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="Paste your generated access token here...">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Initial Fallback Response (if no answer found):</span>
+                        <input type="text" id="whatsapp_fallback_response_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" value="Sorry, I don't know the answer to that." placeholder="e.g., Please contact support at...">
+                    </label>
+                    <button onclick="createBot('whatsapp'); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Create WhatsApp Bot
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Knowledge Base Upload -->
+            <div class="step-card p-6 rounded-xl mb-6">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">3</span> Upload Knowledge Base (Files or URL)</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Website URL (for crawling):</span>
+                        <input type="url" id="whatsapp_kb_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="https://yourcompany.com/faqs">
+                    </label>
+                    <div class="text-gray-400 text-center">-- OR --</div>
+                    <label class="block">
+                        <span class="text-gray-300">Upload Documents (.pdf, .txt, .docx, .csv, .xlsx):</span>
+                        <input type="file" id="whatsapp_kb_file_input" multiple class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-dark-bg hover:file:bg-green-500">
+                    </label>
+                    <button onclick="uploadKnowledgeBase(); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Process & Upload Docs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Update Fallback Response -->
+            <div class="step-card p-6 rounded-xl">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">4</span> Update Custom Fallback Response</h3>
+                <p class="text-sm text-gray-400 mb-3">Customize the response when the knowledge base cannot find a relevant answer.</p>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                    <input type="text" id="whatsapp_fallback_update_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="Enter new fallback response...">
+                    <button onclick="updateFallbackResponse(); return false;" class="bg-secondary text-white py-3 px-6 rounded-lg hover:bg-blue-500 transition duration-150 font-bold">
+                        Update
+                    </button>
+                </div>
+            </div>
+            
+        </section>
+
+        <!-- 4. VOICE BOT SETUP VIEW -->
+        <section id="voice_setup" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">Voice Bot Setup Flow</h2>
+            
+            <!-- Step Indicators -->
+            <div class="flex justify-between items-center mb-8 overflow-x-auto">
+                <div class="flex space-x-4">
+                    <div id="voice-step-1-indicator" class="step-indicator active w-10 h-10 flex items-center justify-center rounded-full font-bold">1</div>
+                    <div id="voice-step-2-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">2</div>
+                    <div id="voice-step-3-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">3</div>
+                    <div id="voice-step-4-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">4</div>
+                    <div id="voice-step-5-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">5</div>
+                    <div id="voice-step-6-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">6</div>
+                    <div id="voice-step-7-indicator" class="step-indicator inactive w-10 h-10 flex items-center justify-center rounded-full font-bold">7</div>
+                </div>
+            </div>
+
+            <!-- Step 1: Bot Creation -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">1</span> Create Voice Bot</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Bot Name:</span>
+                        <input type="text" id="voice_bot_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="e.g., SalesVoiceBot">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Company Name:</span>
+                        <input type="text" id="voice_company_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="e.g., Your Company Inc.">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Owner (Optional):</span>
+                        <input type="text" id="voice_owner_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="e.g., John Doe">
+                    </label>
+                    <button onclick="createVoiceBot(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Create Voice Bot & Get API Key
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Knowledge Base Upload -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">2</span> Upload Knowledge Base (Files or URL)</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Website URL (for crawling):</span>
+                        <input type="url" id="voice_kb_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="https://yourcompany.com/knowledge-base">
+                    </label>
+                    <div class="text-gray-400 text-center">-- OR --</div>
+                    <label class="block">
+                        <span class="text-gray-300">Upload Documents (.pdf, .txt, .docx, .csv, .xlsx):</span>
+                        <input type="file" id="voice_kb_file_input" multiple class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-voice file:text-white hover:file:bg-purple-600">
+                    </label>
+                    <button onclick="uploadVoiceKnowledgeBase(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Process & Upload Docs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Configure Voice Settings -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">3</span> Configure Voice Settings</h3>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="block">
+                            <span class="text-gray-300">Language:</span>
+                            <select id="voice_language_select" onchange="onVoiceLanguageChange()" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice">
+                                <option value="en-IN">English (India)</option>
+                                <option value="en-US">English (US)</option>
+                                <option value="en-GB">English (UK)</option>
+                                <option value="fr-FR">French</option>
+                                <option value="de-DE">German</option>
+                                <option value="es-ES">Spanish</option>
+                                <option value="it-IT">Italian</option>
+                            </select>
+                        </label>
+                        <label class="block">
+                            <span class="text-gray-300">Voice Type:</span>
+                            <select id="voice_type_select" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice">
+                                <option value="WOMAN">Woman</option>
+                                <option value="MAN">Man</option>
+                            </select>
+                        </label>
+                    </div>
+                    
+                    <label class="block">
+                        <span class="text-gray-300">Fallback Response (when no answer found):</span>
+                        <input type="text" id="voice_fallback_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" value="I'm sorry, I didn't understand that. Could you please repeat?" placeholder="Enter fallback response...">
+                    </label>
+                    
+                    <label class="block">
+                        <span class="text-gray-300">Outbound Welcome Message:</span>
+                        <textarea id="voice_welcome_message_input" rows="3" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="Enter welcome message for outbound calls...">Hello! This is your AI assistant calling. How can I help you today?</textarea>
+                    </label>
+                    
+                    <button onclick="configureVoiceSettings(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Save Voice Configuration
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Test Voice Bot -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">4</span> Test Voice Bot</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Test Phone Number (with country code):</span>
+                        <input type="tel" id="test_phone_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="+919876543210">
+                    </label>
+                    
+                    <label class="block">
+                        <span class="text-gray-300">Test Message (Optional):</span>
+                        <textarea id="test_message_input" rows="2" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="Custom message for test call...">Hello! This is a test call from your voice bot. How can I assist you today?</textarea>
+                    </label>
+                    
+                    <button onclick="testVoiceCall(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Make Test Call
+                    </button>
+                    
+                    <div class="mt-4 p-4 bg-gray-800 rounded-lg">
+                        <p class="text-sm text-gray-400 mb-2">Note:</p>
+                        <ul class="text-sm text-gray-400 space-y-1 list-disc list-inside">
+                            <li>Test calls will use the configured voice settings</li>
+                            <li>The bot will use your knowledge base to answer questions</li>
+                            <li>Call analytics will be recorded for review</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Bulk Calls -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">5</span> Make Bulk Calls</h3>
+                <div class="space-y-4">
+                    <div class="flex space-x-4 mb-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="bulk_method" value="manual" checked onclick="toggleBulkMethod('manual')" class="mr-2 text-voice">
+                            <span class="text-gray-300">Manual Entry</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="bulk_method" value="excel" onclick="toggleBulkMethod('excel')" class="mr-2 text-voice">
+                            <span class="text-gray-300">Excel Upload</span>
+                        </label>
+                    </div>
+                    
+                    <!-- Manual Entry Section -->
+                    <div id="manual_recipients_section">
+                        <label class="block">
+                            <span class="text-gray-300">Recipients (JSON format or comma-separated):</span>
+                            <textarea id="manual_recipients_input" rows="5" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder='[{"name": "John Doe", "number": "+919876543210"}, ...] or
+John Doe, +919876543210
+Jane Smith, +919876543211'></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Enter recipients as JSON array or name,number pairs separated by commas</p>
+                        </label>
+                    </div>
+                    
+                    <!-- Excel Upload Section -->
+                    <div id="excel_upload_section" class="hidden">
+                        <label class="block">
+                            <span class="text-gray-300">Upload Excel File:</span>
+                            <input type="file" id="excel_file_input" accept=".xlsx,.xls" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-voice file:text-white hover:file:bg-purple-600">
+                            <p class="text-xs text-gray-500 mt-1">Excel file must have "name" and "number" columns</p>
+                        </label>
+                    </div>
+                    
+                    <button onclick="makeBulkCalls(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Initiate Bulk Calls
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 6: Call Analytics -->
+            <div class="step-card p-6 rounded-xl mb-6 voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">6</span> Call Analytics & Sentiment Analysis</h3>
+                <div class="space-y-4">
+                    <div class="flex space-x-4">
+                        <input type="text" id="analytics_phone_filter" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="Filter by phone number (optional)">
+                        <button onclick="loadCallAnalytics(); return false;" id="load-analytics-btn" class="bg-voice text-white py-3 px-6 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                            Load Analytics
+                        </button>
+                    </div>
+                    
+                    <div id="analytics_container" class="mt-4 p-4 bg-gray-800 rounded-lg min-h-[300px]">
+                        <div class="flex items-center justify-center h-full text-gray-500">
+                            <div class="text-center">
+                                <i data-lucide="bar-chart-3" class="w-12 h-12 mx-auto mb-2"></i>
+                                <p>Click "Load Analytics" to view call analytics</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 bg-gray-800 rounded-lg">
+                        <p class="text-sm font-medium text-gray-300 mb-2">Sentiment Categories:</p>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Interested</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Not Interested</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-orange-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Angry</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-blue-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Satisfied</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-purple-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Callback Request</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full bg-gray-500 mr-2"></div>
+                                <span class="text-xs text-gray-400">Neutral</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 7: Update Configuration -->
+            <div class="step-card p-6 rounded-xl voice-step">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-voice text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">7</span> Update Voice Configuration</h3>
+                <p class="text-sm text-gray-400 mb-4">Update your voice bot's responses and settings after initial configuration.</p>
+                
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Update Fallback Response:</span>
+                        <input type="text" id="voice_fallback_update_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="Enter new fallback response...">
+                    </label>
+                    
+                    <label class="block">
+                        <span class="text-gray-300">Update Welcome Message:</span>
+                        <textarea id="voice_welcome_update_input" rows="3" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-voice focus:border-voice" placeholder="Enter updated welcome message..."></textarea>
+                    </label>
+                    
+                    <button onclick="updateVoiceConfiguration(); return false;" class="w-full bg-voice text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-bold">
+                        Update Configuration
+                    </button>
+                </div>
+            </div>
+            
+        </section>
+
+    </div>
+</body>
+</html>
