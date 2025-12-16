@@ -628,7 +628,7 @@
         console.log('Request body:', requestBody);
         console.log('Stringified body:', JSON.stringify(requestBody));
         
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/bots/website/${botId}/chat`, {
+        const response = await fetch(`https://geminichatx.flourishdigital.in/api/v1/bots/website/${botId}/chat`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
