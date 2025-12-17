@@ -40,7 +40,7 @@ app.add_middleware(
 )
 
 # Include API routes
-app.include_router(api_router)
+# app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(api_key_router)
 app.include_router(voice_router)
