@@ -1,15 +1,21 @@
 import secrets
+import logging
+from datetime import datetime, timedelta
 from passlib.context import CryptContext  # pyright: ignore[reportMissingModuleSource]
 from jose import JWTError, jwt  # pyright: ignore[reportMissingModuleSource]
-from datetime import datetime, timedelta
 from config.settings import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
-import logging
 
 # ==========================
-# Setup
+# Logging setup
 # ==========================
 logger = logging.getLogger(__name__)
+
+# ==========================
+# Password hashing setup
+# ==========================
+# Bcrypt (default) or optionally argon2
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+MAX_BCRYPT_LENGTH = 72  # Bcrypt max password length in bytes
 
 # ==========================
 # API Key Utilities
@@ -25,13 +31,16 @@ def validate_api_key(api_key: str) -> bool:
 # ==========================
 # Password Utilities
 # ==========================
-def truncate_password(password: str, max_len: int = 72) -> str:
-    """Truncate password to max_len characters safely."""
-    return password[:max_len]
+def truncate_password(password: str) -> str:
+    """
+    Truncate password safely to MAX_BCRYPT_LENGTH characters.
+    Avoids bcrypt limitations.
+    """
+    return password[:MAX_BCRYPT_LENGTH]
 
 def get_password_hash(password: str) -> str:
     """
-    Generate a bcrypt hash for the password.
+    Hash the password with bcrypt.
     Truncate to 72 characters to avoid bcrypt limitation.
     """
     safe_pw = truncate_password(password)
