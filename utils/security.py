@@ -25,21 +25,25 @@ def validate_api_key(api_key: str) -> bool:
 # ==========================
 # Password Utilities
 # ==========================
+def truncate_password(password: str, max_len: int = 72) -> str:
+    """Truncate password to max_len characters safely."""
+    return password[:max_len]
+
 def get_password_hash(password: str) -> str:
     """
     Generate a bcrypt hash for the password.
-    Truncate password to 72 bytes to avoid bcrypt limitation.
+    Truncate to 72 characters to avoid bcrypt limitation.
     """
-    pw_bytes = password.encode("utf-8")[:72]  # truncate to 72 bytes
-    return pwd_context.hash(pw_bytes)
+    safe_pw = truncate_password(password)
+    return pwd_context.hash(safe_pw)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a plain password against a hashed password.
-    Truncate password to 72 bytes before verifying.
+    Truncate to 72 characters before verifying.
     """
-    pw_bytes = plain_password.encode("utf-8")[:72]
-    return pwd_context.verify(pw_bytes, hashed_password)
+    safe_pw = truncate_password(plain_password)
+    return pwd_context.verify(safe_pw, hashed_password)
 
 # ==========================
 # JWT Utilities
