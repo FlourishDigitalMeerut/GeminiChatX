@@ -3,21 +3,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+
     container_name: gemini_chatx
+
     ports:
       - "8000:8000"
+
+    platform: linux/amd64
+
     volumes:
-      # Persist SQLite DB
-      - ./bots.db:/app/bots.db
+      # Persist SQLite DB (directory-based – VPS safe)
+      - ./db:/app/db
 
       # Persist vectorstores / data
       - ./data:/app/data
       - ./bots_vectorstores:/app/bots_vectorstores
 
-      # Optional: live code reload (DEV only)
-      # - .:/app
     env_file:
       - .env
+
     restart: unless-stopped
 
     healthcheck:
