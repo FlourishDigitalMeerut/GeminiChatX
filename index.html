@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeminiChatX - AI-Powered Bot Solutions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+            
+            
+        }
+        
+
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.2);
+        }
+        
+        .scroll-smooth {
+            scroll-behavior: smooth;
+        }
+        
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .feature-section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 4rem 0;
+        }
+        
+        .glass-effect {
+            @keyframes marquee {
+                0% { transform: translateX(0%); }
+                100% { transform: translateX(-50%); }
+            }
+            .animate-marquee {
+                display: inline-block;
+                animation: marquee 10s linear infinite;
+                will-change: transform;
+            }
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="text-white scroll-smooth" style="background: linear-gradient(to bottom, #0a0a17 0%, #1a1a2e 100%) !important;">
+    
+    <!-- Navigation -->
+ <nav class="fixed top-0 w-full z-50 glass-effect">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div class="flex items-center justify-between h-16">
+            <!-- Logo Left -->
+            <div class="flex items-center space-x-2 min-w-[180px]">
+                <i data-lucide="zap" class="w-8 h-8 text-purple-500"></i>
+                <span class="text-2xl font-bold gradient-text">GeminiChatX</span>
+            </div>
+            <!-- Center Nav Links (Desktop) -->
+            <div class="hidden md:flex flex-1 justify-center space-x-6 text-base font-medium" id="main-nav-links">
+                <a href="#home" class="text-gray-300 hover:text-white transition">Home</a>
+                <a href="#pricing" class="text-gray-300 hover:text-white transition">Pricing</a>
+                <a href="#how" class="text-gray-300 hover:text-white transition">How it Works</a>
+                <a href="#bots" class="text-gray-300 hover:text-white transition">Services</a>
+                <a href="#faq" class="text-gray-300 hover:text-white transition">FAQ</a>
+            </div>
+            <!-- Hamburger Icon (Mobile) -->
+            <button id="mobile-menu-btn" class="md:hidden flex items-center justify-center p-2 rounded focus:outline-none" aria-label="Open menu" style="transition:opacity 0.2s;">
+                <svg id="hamburger-icon" class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <!-- Auth Buttons Right (Desktop) -->
+            <div class="hidden md:flex items-center space-x-2 min-w-[180px] justify-end" id="nav-buttons">
+                <a href="/app" id="login-btn" class="px-4 py-2 text-purple-400 hover:text-purple-300 transition">Login</a>
+                <a href="/app#signup" id="signup-btn" class="px-6 py-2 gradient-bg rounded-lg hover:opacity-90 transition font-semibold">Sign Up</a>
+            </div>
+        </div>
+    </div>
+    <!-- Mobile Menu Overlay -->
+    <div id="mobile-menu" class="fixed left-0 right-0 top-16 bottom-0 z-50 transition-all duration-300 opacity-0 pointer-events-none md:hidden" style="background:#18182f !important;">
+        <div class="relative w-full h-full flex flex-col items-center pt-8 space-y-6">
+         
+            <button id="mobile-menu-close" class="absolute top-4 right-6 p-2 rounded-full bg-purple-600 hover:bg-purple-700 transition z-10" aria-label="Close menu">
+                <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+            <a href="#home" class="mobile-link w-11/12 max-w-2xl flex items-center gap-3 text-xl py-3 px-4 rounded-lg hover:bg-purple-600/20 transition z-10 text-white">
+                <i data-lucide="home" class="w-6 h-6 text-purple-400"></i> Home
+            </a>
+            <a href="#pricing" class="mobile-link w-11/12 max-w-2xl flex items-center gap-3 text-xl py-3 px-4 rounded-lg hover:bg-purple-600/20 transition z-10 text-white">
+                <i data-lucide="dollar-sign" class="w-6 h-6 text-purple-400"></i> Pricing
+            </a>
+            <a href="#how" class="mobile-link w-11/12 max-w-2xl flex items-center gap-3 text-xl py-3 px-4 rounded-lg hover:bg-purple-600/20 transition z-10 text-white">
+                <i data-lucide="help-circle" class="w-6 h-6 text-purple-400"></i> How it Works
+            </a>
+            <a href="#bots" class="mobile-link w-11/12 max-w-2xl flex items-center gap-3 text-xl py-3 px-4 rounded-lg hover:bg-purple-600/20 transition z-10 text-white">
+                <i data-lucide="bot" class="w-6 h-6 text-purple-400"></i> Services
+            </a>
+            <a href="#faq" class="mobile-link w-11/12 max-w-2xl flex items-center gap-3 text-xl py-3 px-4 rounded-lg hover:bg-purple-600/20 transition z-10 text-white">
+                <i data-lucide="message-square" class="w-6 h-6 text-purple-400"></i> FAQ
+            </a>
+            <div class="flex flex-col space-y-3 mt-4 w-11/12 max-w-2xl items-center z-10">
+                <a href="/app" id="mobile-login-btn" class="px-6 py-2 text-white hover:text-purple-300 transition w-full text-center rounded-lg border border-purple-400">Login</a>
+                <a href="/app#signup" id="mobile-signup-btn" class="px-6 py-2 gradient-bg rounded-lg hover:opacity-90 transition font-semibold w-full text-center text-white">Sign Up</a>
+            </div>
+        </div>
+    </div>
+</nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="relative min-h-screen flex items-center overflow-hidden pt-16 bg-[#0a0a17] animate-fadeinup">
+        <!-- Subtle 'AI' background text on the right -->
+        <div class="absolute left-[30%] top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-0 pointer-events-none select-none hidden md:block">
+            <span style="font-size:9vw; font-weight:900; letter-spacing:-0.05em; line-height:1; opacity:0.10; color:#fff; mix-blend-mode:lighten; text-shadow:0 8px 32px #7f5af0, 0 1px 0 #fff;" class="uppercase">AI</span>
+            <div style="position:absolute;left:50%;top:120%;transform:translateX(-50%);width:600px;">
+                <div class="overflow-hidden w-full">
+                  
+                </div>
+            </div>
+        </div>
+        <!-- Layered SVG lines and soft radial gradient overlay -->
+        <div class="absolute inset-0 w-full h-full pointer-events-none select-none z-0">
+            <svg class="w-full h-full" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="filter: blur(2px); opacity: 0.7;">
+                <defs>
+                    <linearGradient id="lineGradient1" x1="0" y1="0" x2="1920" y2="1080" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#7f5af0"/>
+                        <stop offset="1" stop-color="#2cb67d"/>
+                    </linearGradient>
+                    <linearGradient id="lineGradient2" x1="0" y1="1080" x2="1920" y2="0" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#2cb67d"/>
+                        <stop offset="1" stop-color="#7f5af0"/>
+                    </linearGradient>
+                </defs>
+                <path d="M0 220 Q480 320 960 220 T1920 220" stroke="url(#lineGradient1)" stroke-width="3" fill="none"/>
+                <path d="M0 420 Q480 520 960 420 T1920 420" stroke="url(#lineGradient2)" stroke-width="2" fill="none" opacity="0.7"/>
+                <path d="M0 620 Q480 720 960 620 T1920 620" stroke="url(#lineGradient1)" stroke-width="2" fill="none" opacity="0.5"/>
+            </svg>
+            <div style="position:absolute;left:0;top:0;width:100%;height:100%;background:radial-gradient(ellipse at 60% 40%,rgba(127,90,240,0.12) 0,rgba(44,182,125,0.10) 60%,transparent 100%);z-index:1;"></div>
+        </div>
+        <div class="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 z-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center min-h-[70vh]">
+                <!-- Left: Content -->
+                <div class="text-left z-10 flex flex-col gap-4 md:gap-6 max-w-lg">
+                    <div class="flex items-center" style="min-height:2.5em;">
+                        <h1 id="hero-animated-headline" class="text-2xl md:text-6xl font-extrabold gradient-text transition-all duration-500 ease-in-out">
+                            <!-- Animated headline will appear here -->
+                        </h1>
+                    </div>
+                    <p class="text-xs md:text-base text-gray-300 mb-2 md:mb-4 leading-relaxed">
+                        Deploy intelligent chatbots across your website, WhatsApp, and voice channels. Automate customer support, boost engagement, and scale your business with AI.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-2 md:gap-4 mb-2 md:mb-4">
+                        <a href="/app#signup" class="px-5 py-2 md:px-6 md:py-2.5 gradient-bg rounded-lg text-sm md:text-base font-semibold hover:opacity-90 transition transform hover:scale-105 shadow">
+                            Get Started Free
+                        </a>
+                        <a href="#bots" class="px-5 py-2 md:px-6 md:py-2.5 glass-effect rounded-lg text-sm md:text-base font-semibold hover:bg-white hover:bg-opacity-10 transition shadow">
+                            Explore Bots
+                        </a>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 md:gap-3 max-w-xs mt-2">
+                        <div class="text-center">
+                            <div class="text-lg md:text-2xl font-bold gradient-text">3+</div>
+                            <div class="text-gray-400 mt-1 text-xs md:text-base">Bot Types</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg md:text-2xl font-bold gradient-text">24/7</div>
+                            <div class="text-gray-400 mt-1 text-xs md:text-base">Availability</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-lg md:text-2xl font-bold gradient-text">100%</div>
+                            <div class="text-gray-400 mt-1 text-xs md:text-base">Automated</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right: Visual Element -->
+                <div class="flex justify-center md:justify-end">
+                    <video src="/static/gif.mp4" autoplay loop muted playsinline class="rounded-2xl w-full h-[420px] md:h-[560px] object-cover " style="background:rgba(0,0,0,0.18);"></video>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Marquee between hero and website bot -->
+    <div class="w-full bg-transparent px-10 select-none">
+        <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-40 mb-2"></div>
+        <div class="overflow-hidden w-full py-10">
+            <div class="whitespace-nowrap animate-marquee text-3xl md:text-5xl font-extrabold gradient-text opacity-90 select-none" style="letter-spacing:0.08em;">
+                GeminiChatX<span style="display:inline-block;width:2.5rem;"></span>GeminiChatX<span style="display:inline-block;width:2.5rem;"></span>GeminiChatX<span style="display:inline-block;width:2.5rem;"></span>GeminiChatX
+            </div>
+        </div>
+        <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-40 mt-2"></div>
+    </div>
+
+    <!-- Website Bot Section -->
+    <section id="bots" class="feature-section section-bg animate-fadeinup" style="animation-delay:0.3s;">
+                <style>
+                @keyframes fadeinup {
+                    0% { opacity: 0; transform: translateY(40px); }
+                    100% { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fadeinup {
+                    animation: fadeinup 1.1s cubic-bezier(0.23, 1, 0.32, 1) both;
+                }
+                </style>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <!-- Left: Description -->
+                <div>
+                    <div class="inline-flex items-center space-x-2 px-4 py-2 bg-blue-500 bg-opacity-10 rounded-full mb-6">
+                        <i data-lucide="globe" class="w-5 h-5 text-blue-400"></i>
+                        <span class="text-blue-400 font-semibold">Website Bot</span>
+                    </div>
+                    <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                        Intelligent Website<br/>
+                        <span class="gradient-text">Chat Assistant</span>
+                    </h2>
+                    <p class="text-gray-300 text-lg mb-6">
+                        Transform your website with an AI-powered chatbot that understands your content, 
+                        answers questions instantly, and engages visitors 24/7. Trained on your website data 
+                        for accurate, context-aware responses.
+                    </p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Automatic website crawling and content learning</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Customizable chat widget with your branding</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Real-time visitor insights and analytics</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Seamless integration with one line of code</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Right: Visual Element -->
+                <div class="relative">
+                    <div class="glass-effect rounded-2xl p-8 card-hover">
+                        <div class="bg-gray-800 rounded-lg p-6">
+                            <div class="flex items-center space-x-2 mb-4">
+                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="flex justify-end">
+                                    <div class="bg-blue-600 rounded-lg px-4 py-2 max-w-xs">
+                                        <p class="text-sm">What are your business hours?</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-start">
+                                    <div class="bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
+                                        <p class="text-sm">We're open Monday to Friday, 9 AM to 6 PM EST. How can I help you today?</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-end">
+                                    <div class="bg-blue-600 rounded-lg px-4 py-2 max-w-xs">
+                                        <p class="text-sm">Do you offer technical support?</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-start">
+                                    <div class="bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
+                                        <p class="text-sm">Yes! We provide 24/7 technical support. You can reach our support team anytime.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex items-center justify-center space-x-2 text-sm text-gray-400">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                            <span>Powered by AI</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WhatsApp Bot Section -->
+    <section class="feature-section bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <!-- Left: Visual Element -->
+                <div class="relative order-2 md:order-1">
+                    <div class="glass-effect rounded-2xl p-8 card-hover">
+                        <div class="bg-gradient-to-br from-green-600 to-green-700 rounded-lg p-6">
+                            <div class="flex items-center space-x-3 mb-6">
+                                <i data-lucide="message-circle" class="w-8 h-8"></i>
+                                <span class="text-xl font-bold">WhatsApp Business</span>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="bg-white text-gray-900 rounded-lg px-4 py-3">
+                                    <p class="text-sm font-medium mb-1">👋 Welcome!</p>
+                                    <p class="text-sm">How can I assist you today?</p>
+                                    <p class="text-xs text-gray-500 mt-2">10:30 AM</p>
+                                </div>
+                                <div class="bg-gray-100 text-gray-900 rounded-lg px-4 py-3 ml-8">
+                                    <p class="text-sm">I'd like to know about your products</p>
+                                    <p class="text-xs text-gray-500 mt-2">10:31 AM</p>
+                                </div>
+                                <div class="bg-white text-gray-900 rounded-lg px-4 py-3">
+                                    <p class="text-sm">Great! I can help you with that. We offer:</p>
+                                    <ul class="text-sm mt-2 space-y-1">
+                                        <li>✓ Website Bots</li>
+                                        <li>✓ Voice Bots</li>
+                                        <li>✓ WhatsApp Automation</li>
+                                    </ul>
+                                    <p class="text-xs text-gray-500 mt-2">10:31 AM</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex items-center justify-center space-x-2 text-sm text-gray-400">
+                            <i data-lucide="clock" class="w-4 h-4"></i>
+                            <span>Instant Responses</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Description -->
+                <div class="order-1 md:order-2">
+                    <div class="inline-flex items-center space-x-2 px-4 py-2 bg-green-500 bg-opacity-10 rounded-full mb-6">
+                        <i data-lucide="message-square" class="w-5 h-5 text-green-400"></i>
+                        <span class="text-green-400 font-semibold">WhatsApp Bot</span>
+                    </div>
+                    <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                        Connect Through<br/>
+                        <span class="gradient-text">WhatsApp Business</span>
+                    </h2>
+                    <p class="text-gray-300 text-lg mb-6">
+                        Reach your customers where they are. Deploy intelligent WhatsApp bots that handle 
+                        inquiries, bookings, orders, and support automatically. Provide instant responses 
+                        and enhance customer satisfaction.
+                    </p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Automated message handling and responses</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Rich media support (images, videos, documents)</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Interactive buttons and quick replies</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Broadcast messages and campaigns</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Voice Bot Section -->
+    <section class="feature-section section-bg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-2 gap-12 items-center">
+                <!-- Left: Description -->
+                <div>
+                    <div class="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500 bg-opacity-10 rounded-full mb-6">
+                        <i data-lucide="phone" class="w-5 h-5 text-purple-400"></i>
+                        <span class="text-purple-400 font-semibold">Voice Bot</span>
+                    </div>
+                    <h2 class="text-4xl md:text-5xl font-bold mb-6">
+                        Natural Voice<br/>
+                        <span class="gradient-text">Conversations</span>
+                    </h2>
+                    <p class="text-gray-300 text-lg mb-6">
+                        Handle phone calls with human-like AI voice assistants. Automate customer service, 
+                        appointment scheduling, order taking, and more through natural voice conversations 
+                        that understand context and intent.
+                    </p>
+                    <ul class="space-y-4">
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Natural language understanding and processing</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Multiple languages and voice options</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Call recording and analytics</span>
+                        </li>
+                        <li class="flex items-start space-x-3">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-400 mt-1 flex-shrink-0"></i>
+                            <span class="text-gray-300">Integration with Plivo for phone numbers</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Right: Visual Element -->
+                <div class="relative">
+                    <div class="glass-effect rounded-2xl p-8 card-hover">
+                        <div class="bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg p-8">
+                            <div class="flex flex-col items-center text-center">
+                                <div class="w-32 h-32 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                                    <i data-lucide="mic" class="w-16 h-16"></i>
+                                </div>
+                                <h3 class="text-2xl font-bold mb-2">AI Voice Assistant</h3>
+                                <p class="text-purple-100 mb-6">Listening...</p>
+                                
+                                <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-4 w-full">
+                                    <p class="text-sm italic">"Hello, I'd like to schedule an appointment for tomorrow."</p>
+                                </div>
+                                
+                                <div class="flex items-center space-x-2 text-sm">
+                                    <div class="flex space-x-1">
+                                        <div class="w-1 h-8 bg-white rounded animate-pulse"></div>
+                                        <div class="w-1 h-12 bg-white rounded animate-pulse" style="animation-delay: 0.1s;"></div>
+                                        <div class="w-1 h-6 bg-white rounded animate-pulse" style="animation-delay: 0.2s;"></div>
+                                        <div class="w-1 h-10 bg-white rounded animate-pulse" style="animation-delay: 0.3s;"></div>
+                                        <div class="w-1 h-8 bg-white rounded animate-pulse" style="animation-delay: 0.4s;"></div>
+                                    </div>
+                                    <span>Processing speech...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex items-center justify-center space-x-2 text-sm text-gray-400">
+                            <i data-lucide="brain" class="w-4 h-4"></i>
+                            <span>AI-Powered Understanding</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Section: With vs Without GeminiChatX Chatbot -->
+    <section id="how" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div class="relative flex flex-col md:flex-row items-stretch justify-center gap-8 md:gap-0">
+        <!-- Without Card -->
+        <div class="flex-1 glass-effect rounded-2xl p-8 md:mr-4 border border-[#7f5af0]/40 bg-[#18182f]/80 min-w-[320px] shadow-lg">
+          <h3 class="text-xl md:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-[#7f5af0] to-[#2cb67d] bg-clip-text text-transparent">Without <span class="gradient-text">geminichatx.com</span> Chatbot</h3>
+          <ul class="space-y-4">
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Losing customers from slow or unresponsive support.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Wasting time on repetitive questions.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Spending hours writing support replies manually.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Support unavailable when customers need it most.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Dealing with support issues at 3 AM.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Struggling with language issues.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="x-circle" class="w-6 h-6 text-[#ff4b6e] mt-1"></i><span>Choosing a complex journey (why make it harder?).</span></li>
+          </ul>
+        </div>
+        <!-- VS Circle -->
+        <div class="hidden md:flex flex-col justify-center items-center mx-2">
+          <div class="rounded-full bg-gradient-to-br from-[#7f5af0] to-[#2cb67d] w-14 h-14 flex items-center justify-center shadow-lg border-4 border-[#18182f]">
+            <span class="text-lg font-bold text-white">vs</span>
+          </div>
+        </div>
+        <!-- With Card -->
+        <div class="flex-1 glass-effect rounded-2xl p-8 md:ml-4 border border-[#2cb67d]/40 bg-[#18182f]/80 min-w-[320px] shadow-lg">
+          <h3 class="text-xl md:text-2xl font-bold mb-6 text-center bg-gradient-to-r from-[#2cb67d] to-[#7f5af0] bg-clip-text text-transparent">With <span class="gradient-text">geminichatx.com</span> Chatbot</h3>
+          <ul class="space-y-4">
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Instant and accurate answers 24/7 in 90+ languages.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Reduce interested customer loss and churn.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Sleeping soundly at 3 AM.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Deliver top-tier support, boost satisfaction.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Focus on high-value tasks.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Save time, even when replying yourself, with AI assistance.</span></li>
+            <li class="flex items-start gap-3"><i data-lucide="check-circle" class="w-6 h-6 text-[#2cb67d] mt-1"></i><span>Scale effortlessly with AI.</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+        <!-- Pricing Section -->
+        <section id="pricing" class="py-20 ">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-4xl md:text-5xl font-bold mb-4 gradient-text">Pricing Plans</h2>
+                <p class="text-gray-300 mb-10 text-lg">Choose the plan that fits your business. Simple, transparent pricing.</p>
+                <!-- Toggle -->
+                <div class="flex justify-center mb-12">
+                    <div class="inline-flex items-center bg-[#23234a] rounded-full p-1 shadow-lg">
+                        <button id="monthlyBtn" class="px-6 py-2 rounded-full font-semibold text-sm transition focus:outline-none gradient-text bg-white bg-opacity-0" style="transition:background 0.2s;">Monthly</button>
+                        <button id="annualBtn" class="px-6 py-2 rounded-full font-semibold text-sm text-gray-300 transition focus:outline-none" style="transition:background 0.2s;">Annually <span class="ml-1 px-2 py-0.5 rounded bg-green-600 text-xs text-white">Save 20%</span></button>
+                    </div>
+                </div>
+                <!-- Pricing Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Starter -->
+                    <div class="glass-effect rounded-2xl p-8 card-hover border-2 border-[#7f5af0]/40 bg-[#23234a]/80 flex flex-col items-center">
+                        <h3 class="text-2xl font-bold mb-2 gradient-text">Starter</h3>
+                        <div class="text-4xl font-extrabold mb-2 gradient-text" id="starterPrice">$19</div>
+                        <div class="text-gray-400 mb-6" id="starterPeriod">/month</div>
+                        <ul class="text-gray-300 space-y-3 mb-8 text-left">
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>1 Bot Channel</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Up to 1,000 messages/mo</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Email Support</li>
+                        </ul>
+                        <a href="/app#signup" class="gradient-bg px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition">Get Started</a>
+                    </div>
+                    <!-- Pro -->
+                    <div class="glass-effect rounded-2xl p-8 card-hover border-2 border-[#2cb67d]/40 bg-[#23234a]/80 flex flex-col items-center scale-105 shadow-xl">
+                        <h3 class="text-2xl font-bold mb-2 gradient-text">Pro</h3>
+                        <div class="text-4xl font-extrabold mb-2 gradient-text" id="proPrice">$39</div>
+                        <div class="text-gray-400 mb-6" id="proPeriod">/month</div>
+                        <ul class="text-gray-300 space-y-3 mb-8 text-left">
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>All Bot Channels</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Up to 10,000 messages/mo</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Priority Support</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Custom Branding</li>
+                        </ul>
+                        <a href="/app#signup" class="gradient-bg px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition">Start Pro</a>
+                    </div>
+                    <!-- Enterprise -->
+                    <div class="glass-effect rounded-2xl p-8 card-hover border-2 border-[#7f5af0]/40 bg-[#23234a]/80 flex flex-col items-center">
+                        <h3 class="text-2xl font-bold mb-2 gradient-text">Enterprise</h3>
+                        <div class="text-4xl font-extrabold mb-2 gradient-text" id="enterprisePrice">$99</div>
+                        <div class="text-gray-400 mb-6" id="enterprisePeriod">/month</div>
+                        <ul class="text-gray-300 space-y-3 mb-8 text-left">
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Unlimited Bots & Channels</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Unlimited messages</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Dedicated Manager</li>
+                            <li><i data-lucide="check-circle" class="inline w-5 h-5 text-green-400 mr-2"></i>Premium Support</li>
+                        </ul>
+                        <a href="/app#signup" class="gradient-bg px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition">Contact Sales</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="py-20">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 class="text-4xl md:text-5xl font-bold mb-10 bg-gradient-to-r from-[#7f5af0] to-[#2cb67d] bg-clip-text text-transparent text-center">Frequently Asked Questions</h2>
+        <div id="faq-accordion" class="space-y-4">
+          <!-- FAQ items will be rendered here by JS -->
+        </div>
+      </div>
+    </section>
+    <script>
+        // Mobile menu toggle logic
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuClose = document.getElementById('mobile-menu-close');
+        const hamburgerIcon = document.getElementById('hamburger-icon');
+        function openMobileMenu() {
+            mobileMenu.style.opacity = '1';
+            mobileMenu.style.pointerEvents = 'auto';
+            if (window.lucide) lucide.createIcons();
+            if (hamburgerIcon) hamburgerIcon.style.display = 'none';
+        }
+        function closeMobileMenu() {
+            mobileMenu.style.opacity = '0';
+            mobileMenu.style.pointerEvents = 'none';
+            if (hamburgerIcon) hamburgerIcon.style.display = '';
+        }
+        if (mobileMenuBtn && mobileMenu && mobileMenuClose) {
+            mobileMenuBtn.onclick = openMobileMenu;
+            mobileMenuClose.onclick = closeMobileMenu;
+            document.querySelectorAll('.mobile-link').forEach(link => {
+                link.onclick = closeMobileMenu;
+            });
+        }
+      const faqData = [
+        { q: 'What is GeminiChatX?', a: 'GeminiChatX is an AI-powered chatbot platform for websites, WhatsApp, and voice, designed to automate support and boost engagement.' },
+        { q: 'Can I use GeminiChatX on my website and WhatsApp?', a: 'Yes! You can deploy bots on your website, WhatsApp, and even voice channels with a single platform.' },
+        { q: 'Is my data secure?', a: 'Absolutely. We use enterprise-grade security and end-to-end encryption to keep your data safe.' },
+        { q: 'Can I try GeminiChatX for free?', a: 'Yes, we offer a free trial so you can experience the platform before committing.' },
+        { q: 'How do I get support?', a: 'Our support team is available 24/7 via email and chat to help you succeed.' },
+      ];
+      function renderFAQ() {
+        const faqHtml = faqData.map((item, i) => `
+          <div class="rounded-xl glass-effect border border-[#7f5af0]/40 bg-[#18182f]/80">
+            <button type="button" class="w-full flex justify-between items-center px-6 py-4 text-lg font-semibold gradient-text focus:outline-none faq-toggle" data-index="${i}">
+              <span>${item.q}</span>
+              <svg class="w-6 h-6 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="faq-answer px-6 pb-4 text-gray-300 text-base hidden">${item.a}</div>
+          </div>
+        `).join('');
+        document.getElementById('faq-accordion').innerHTML = faqHtml;
+        // Toggle logic
+        document.querySelectorAll('.faq-toggle').forEach(btn => {
+          btn.onclick = function() {
+            const idx = this.getAttribute('data-index');
+            const answer = this.parentElement.querySelector('.faq-answer');
+            const icon = this.querySelector('svg');
+            if (answer.classList.contains('hidden')) {
+              document.querySelectorAll('.faq-answer').forEach(a => a.classList.add('hidden'));
+              document.querySelectorAll('.faq-toggle svg').forEach(i => i.classList.remove('rotate-180'));
+              answer.classList.remove('hidden');
+              icon.classList.add('rotate-180');
+            } else {
+              answer.classList.add('hidden');
+              icon.classList.remove('rotate-180');
+            }
+          };
+        });
+      }
+      renderFAQ();
+
+            // Pricing Toggle Logic
+            const monthlyBtn = document.getElementById('monthlyBtn');
+            const annualBtn = document.getElementById('annualBtn');
+            const starterPrice = document.getElementById('starterPrice');
+            const proPrice = document.getElementById('proPrice');
+            const enterprisePrice = document.getElementById('enterprisePrice');
+            const starterPeriod = document.getElementById('starterPeriod');
+            const proPeriod = document.getElementById('proPeriod');
+            const enterprisePeriod = document.getElementById('enterprisePeriod');
+
+            function setMonthly() {
+                monthlyBtn.classList.add('gradient-text');
+                monthlyBtn.classList.remove('text-gray-300');
+                annualBtn.classList.remove('gradient-text');
+                annualBtn.classList.add('text-gray-300');
+                starterPrice.textContent = '$19';
+                proPrice.textContent = '$39';
+                enterprisePrice.textContent = '$99';
+                starterPeriod.textContent = '/month';
+                proPeriod.textContent = '/month';
+                enterprisePeriod.textContent = '/month';
+            }
+            function setAnnually() {
+                annualBtn.classList.add('gradient-text');
+                annualBtn.classList.remove('text-gray-300');
+                monthlyBtn.classList.remove('gradient-text');
+                monthlyBtn.classList.add('text-gray-300');
+                starterPrice.textContent = '$15';
+                proPrice.textContent = '$31';
+                enterprisePrice.textContent = '$79';
+                starterPeriod.textContent = '/month (billed yearly)';
+                proPeriod.textContent = '/month (billed yearly)';
+                enterprisePeriod.textContent = '/month (billed yearly)';
+            }
+            if (monthlyBtn && annualBtn) {
+                monthlyBtn.onclick = setMonthly;
+                annualBtn.onclick = setAnnually;
+                setMonthly();
+            }
+    </script>
+    <!-- Social Links Row -->
+    <div class="w-full flex justify-center items-center gap-8 py-8">
+        <a href="https://twitter.com/" target="_blank" class="flex items-center gap-2 text-white hover:text-purple-400 transition text-lg">
+            <i data-lucide="twitter" class="w-6 h-6"></i> Twitter
+        </a>
+        <a href="https://facebook.com/" target="_blank" class="flex items-center gap-2 text-white hover:text-purple-400 transition text-lg">
+            <i data-lucide="facebook" class="w-6 h-6"></i> Facebook
+        </a>
+        <a href="https://linkedin.com/" target="_blank" class="flex items-center gap-2 text-white hover:text-purple-400 transition text-lg">
+            <i data-lucide="linkedin" class="w-6 h-6"></i> LinkedIn
+        </a>
+        <a href="https://instagram.com/" target="_blank" class="flex items-center gap-2 text-white hover:text-purple-400 transition text-lg">
+            <i data-lucide="instagram" class="w-6 h-6"></i> Instagram
+        </a>
+    </div>
+    <footer class="glass-effect border-t border-[#7f5af0]/40 bg-[#18182f]/90 py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid md:grid-cols-4 gap-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <i data-lucide="zap" class="w-6 h-6 text-purple-500"></i>
+                        <span class="text-xl font-bold gradient-text">GeminiChatX</span>
+                    </div>
+                    <p class="text-gray-400">
+                        AI-powered bot solutions for modern businesses.
+                    </p>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4 bg-gradient-to-r from-[#7f5af0] to-[#2cb67d] bg-clip-text text-transparent">Product</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#bots" class="hover:text-white transition">Website Bot</a></li>
+                        <li><a href="#bots" class="hover:text-white transition">WhatsApp Bot</a></li>
+                        <li><a href="#bots" class="hover:text-white transition">Voice Bot</a></li>
+                        <li><a href="#why-us" class="hover:text-white transition">Features</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4 bg-gradient-to-r from-[#2cb67d] to-[#7f5af0] bg-clip-text text-transparent">Company</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <!-- <li><a href="#" class="hover:text-white transition">About Us</a></li> -->
+                        <!-- <li><a href="#" class="hover:text-white transition">Contact</a></li> -->
+                        <li><a href="#" class="hover:text-white transition">Privacy Policy</a></li>
+                        <li><a href="#" class="hover:text-white transition">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4 bg-gradient-to-r from-[#7f5af0] to-[#2cb67d] bg-clip-text text-transparent">Resources</h4>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition">Documentation</a></li>
+                        <li><a href="#" class="hover:text-white transition">API Reference</a></li>
+                        <li><a href="#" class="hover:text-white transition">Support</a></li>
+                        <li><a href="/app" class="hover:text-white transition">Dashboard</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-[#7f5af0]/40 mt-12 pt-8 text-center text-gray-400">
+                <p>&copy; 2026 GeminiChatX. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Animated headline cycling (show first phrase immediately)
+        const heroPhrases = [
+            "AI Powered Bot Solution",
+            "Build Intelligence",
+            "Engage Users Seamlessly"
+        ];
+        let heroPhraseIndex = 0;
+        const headlineEl = document.getElementById('hero-animated-headline');
+        function showNextHeroPhrase() {
+            if (!headlineEl) return;
+            headlineEl.style.opacity = 0;
+            setTimeout(() => {
+                headlineEl.textContent = heroPhrases[heroPhraseIndex];
+                headlineEl.style.opacity = 1;
+                heroPhraseIndex = (heroPhraseIndex + 1) % heroPhrases.length;
+            }, 350);
+        }
+        // Show the first phrase immediately
+        if (headlineEl) {
+            headlineEl.textContent = heroPhrases[0];
+            headlineEl.style.opacity = 1;
+            heroPhraseIndex = 1;
+            setTimeout(() => {
+                showNextHeroPhrase();
+                setInterval(showNextHeroPhrase, 2200);
+            }, 2200);
+        }
+    </script>
+    
+
+    <script>
+        // Check if user is logged in
+        function checkAuthStatus() {
+            const user = localStorage.getItem('geminiChatX_user'); // Use correct key
+            const loginBtn = document.getElementById('login-btn');
+            const signupBtn = document.getElementById('signup-btn');
+            
+            if (user) {
+                try {
+                    const userData = JSON.parse(user);
+                    if (userData.accessToken) {
+                        // User is logged in - show dashboard and logout buttons
+                        loginBtn.href = '/app';
+                        loginBtn.textContent = 'Dashboard';
+                        loginBtn.className = 'px-4 py-2 text-purple-400 hover:text-purple-300 transition';
+                        
+                        signupBtn.textContent = 'Logout';
+                        signupBtn.href = '#';
+                        signupBtn.className = 'px-6 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition font-semibold';
+                        signupBtn.onclick = (e) => {
+                            e.preventDefault();
+                            localStorage.removeItem('geminiChatX_user');
+                            localStorage.removeItem('bots');
+                            window.location.reload();
+                        };
+                    }
+                } catch (e) {
+                    console.error('Error parsing user data:', e);
+                }
+            }
+        }
+        
+        // Initialize Lucide icons
+        lucide.createIcons();
+        
+        // Check auth status on page load
+        checkAuthStatus();
+        
+        // Smooth scroll for anchor links (desktop only)
+        document.querySelectorAll('a[href^="#"]:not(.mobile-link)').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

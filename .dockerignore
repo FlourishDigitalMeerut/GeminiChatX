@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+
+# Virtual environments
+venv/
+.env
+
+# Git
+.git/
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node / frontend (if any later)
+node_modules/
+
+# Logs
+*.log
+
+# Editor config
+.vscode/
+.idea/
+
+# Media (optional – include only if needed)
+*.mp4
+*.gif
+
+# Local databases (optional – uncomment if you want fresh DB per container)
+# bots.db

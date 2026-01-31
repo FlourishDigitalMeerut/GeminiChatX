@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot Management Dashboard</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <!-- Configure Tailwind to use Inter font and custom colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#60a5fa',
+                        'accent': '#34d399',
+                        'dark-bg': '#1f2937',
+                        'card-bg': '#374151',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Load Lucide icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            background-color: #1f2937; /* dark-bg */
+            font-family: 'Inter', sans-serif;
+        }
+        .page-content {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .page-content.active {
+            display: block;
+            opacity: 1;
+        }
+        .step-card {
+            background-color: #374151; /* card-bg */
+            border: 1px solid #4b5563;
+        }
+        .api-key-container input[type="text"] {
+            font-family: monospace;
+            padding-right: 3rem; /* Space for the eye icon */
+        }
+        .loading-animation {
+            border-top-color: #4f46e5;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .bot-card {
+            transition: all 0.3s ease;
+        }
+        .bot-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        /* Custom styles for code display */
+        .code-container {
+            background-color: #1a1a1a;
+            border-radius: 0.5rem;
+            border: 1px solid #374151;
+            overflow: hidden;
+        }
+        .code-header {
+            background-color: #2d2d2d;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #374151;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .code-language {
+            color: #e5e7eb;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .code-content {
+            padding: 1rem;
+            margin: 0;
+            overflow-x: auto;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        .code-content code {
+            background: none;
+            padding: 0;
+            color: #f8f8f2;
+        }
+        /* Override prism background */
+        pre[class*="language-"] {
+            background: #1a1a1a !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+        }
+        /* Chat interface styles */
+        .chat-message {
+            max-width: 80%;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+        }
+        .user-message {
+            background-color: #4f46e5;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .bot-message {
+            background-color: #374151;
+            color: #e5e7eb;
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+        }
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <!-- Global State & Configuration -->
+    <script>
+        // Set the backend host URL
+        const API_HOST = "http://127.0.0.1:8000/api/v1";
+
+        const state = {
+            platform: null, // 'website' or 'whatsapp'
+            bot: {
+                id: null,
+                name: "Unassigned Bot",
+                apiKey: null,
+                accessToken: null,
+                fallbackResponse: "Sorry, I don't know the answer to that."
+            },
+            // Mock data for demonstration purposes before API is hit
+            isAuthenticated: false,
+            currentView: 'dashboard',
+            existingBots: [], // Store existing bots for the dashboard
+            chatHistory: [] // Store chat history for testing
+        };
+
+        // --- Utility Functions ---
+
+        /** Shows a temporary toast notification. */
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgColor = 'bg-green-500';
+            if (type === 'error') bgColor = 'bg-red-600';
+            if (type === 'info') bgColor = 'bg-blue-500';
+            if (type === 'loading') bgColor = 'bg-primary';
+
+            toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl text-white ${bgColor} transform transition-all duration-300 translate-y-full opacity-0`;
+            toast.innerHTML = `${type === 'loading' ? '<div class="loading-animation w-5 h-5 border-2 border-white border-solid rounded-full inline-block mr-2"></div>' : ''} ${message}`;
+
+            toastContainer.appendChild(toast);
+            
+            // Show animation
+            setTimeout(() => {
+                toast.classList.remove('translate-y-full', 'opacity-0');
+            }, 10);
+
+            // Hide after 4 seconds unless it's a permanent error/loading state
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    toast.classList.add('translate-y-full', 'opacity-0');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }, 4000);
+            }
+
+            return {
+                update: (newMessage, newType = 'success') => {
+                    let newBgColor = 'bg-green-500';
+                    if (newType === 'error') newBgColor = 'bg-red-600';
+                    if (newType === 'info') newBgColor = 'bg-blue-500';
+                    if (newType === 'loading') newBgColor = 'bg-primary';
+
+                    toast.className = `fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-xl text-white transform transition-all duration-300 ${newBgColor}`;
+                    toast.innerHTML = `${newType === 'loading' ? '<div class="loading-animation w-5 h-5 border-2 border-white border-solid rounded-full inline-block mr-2"></div>' : ''} ${newMessage}`;
+
+                    if (newType !== 'loading') {
+                        setTimeout(() => {
+                            toast.classList.add('translate-y-full', 'opacity-0');
+                            toast.addEventListener('transitionend', () => toast.remove());
+                        }, 4000);
+                    }
+                },
+                remove: () => {
+                    toast.classList.add('translate-y-full', 'opacity-0');
+                    toast.addEventListener('transitionend', () => toast.remove());
+                }
+            };
+        }
+
+        /** Utility for copying text to clipboard. */
+        function copyText(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('Copied to clipboard!', 'info');
+                }).catch(err => {
+                    console.error('Could not copy text: ', err);
+                    showToast('Failed to copy. See console for error.', 'error');
+                });
+            } else {
+                showToast('Clipboard API not supported by your browser.', 'error');
+            }
+        }
+
+        /** Renders the main bot header with ID and keys. */
+        function renderBotHeader() {
+            const header = document.getElementById('bot-details-header');
+            if (!header) return;
+
+            const name = state.bot.name;
+            const id = state.bot.id;
+            const key = state.platform === 'website' ? state.bot.apiKey : state.bot.accessToken;
+            const keyLabel = state.platform === 'website' ? 'API Key' : 'Access Token';
+            const keyId = state.platform === 'website' ? 'bot-api-key' : 'bot-access-token';
+
+            if (id === null) {
+                 header.innerHTML = `
+                    <p class="text-xl font-bold text-gray-300">${name}</p>
+                    <p class="text-sm text-gray-400">Bot ID: N/A | Status: Not Created</p>
+                `;
+                return;
+            }
+
+            header.innerHTML = `
+                <div class="flex items-center space-x-4">
+                    <p class="text-xl font-bold text-accent">${name}</p>
+                    <p class="text-sm text-gray-400">ID: ${id}</p>
+                </div>
+                <div class="mt-2 sm:mt-0 flex items-center space-x-2">
+                    <span class="text-sm font-medium text-gray-400">${keyLabel}:</span>
+                    <div class="relative api-key-container">
+                        <input type="text" id="${keyId}" value="${key || 'Pending...'}" readonly class="w-full sm:w-64 p-2 text-sm text-white bg-card-bg border border-gray-600 rounded-md focus:ring-primary focus:border-primary transition duration-150" style="-webkit-text-security: disc;">
+                        <button onclick="toggleKeyVisibility('${keyId}', this); return false;" class="absolute inset-y-0 right-0 p-2 text-gray-400 hover:text-white" title="Toggle visibility">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <button onclick="copyText(document.getElementById('${keyId}').value); return false;" class="p-2 text-gray-400 hover:text-primary rounded-md" title="Copy to clipboard">
+                        <i data-lucide="copy" class="w-5 h-5"></i>
+                    </button>
+                    ${state.platform === 'website' ? `
+                    <button onclick="regenerateApiKey(); return false;" class="p-2 text-gray-400 hover:text-yellow-500 rounded-md" title="Regenerate API Key">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                    ` : ''}
+                </div>
+            `;
+            // Re-render lucide icons after injecting HTML
+            lucide.createIcons();
+        }
+
+        /** Toggles the obscured text security for sensitive keys. */
+        function toggleKeyVisibility(inputId, buttonElement) {
+            const input = document.getElementById(inputId);
+            const icon = buttonElement.querySelector('i');
+            if (input.style.webkitTextSecurity === 'disc') {
+                input.style.webkitTextSecurity = 'none';
+                icon.innerHTML = lucide.createIcons()['eye-off'].toSvg();
+            } else {
+                input.style.webkitTextSecurity = 'disc';
+                icon.innerHTML = lucide.createIcons()['eye'].toSvg();
+            }
+        }
+
+        /** Handles navigation between pages/views. */
+        function showPage(pageId, platform = null) {
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.remove('active');
+            });
+            const newPage = document.getElementById(pageId);
+            if (newPage) {
+                newPage.classList.add('active');
+                state.currentView = pageId;
+
+                // Reset bot state if moving away from a setup page
+                if (pageId === 'dashboard') {
+                    state.bot.id = null;
+                    state.bot.name = "Unassigned Bot";
+                    state.bot.apiKey = null;
+                    state.bot.accessToken = null;
+                    state.bot.fallbackResponse = "Sorry, I don't know the answer to that.";
+                    state.platform = null;
+                    state.chatHistory = [];
+                }
+
+                // If navigating to a setup page, set platform
+                if (platform) {
+                    state.platform = platform;
+                }
+
+                if (pageId === 'website_setup' || pageId === 'whatsapp_setup') {
+                    // Reset the "needs-bot-id" sections
+                    document.querySelectorAll('.needs-bot-id').forEach(el => {
+                        el.classList.add('hidden');
+                    });
+                    
+                    // Update header and form initial values
+                    document.getElementById('fallback_response_input').value = state.bot.fallbackResponse;
+                    document.getElementById('fallback_update_input').value = state.bot.fallbackResponse;
+                    renderBotHeader();
+                    
+                    // Clear chat history
+                    state.chatHistory = [];
+                    renderChatHistory();
+                }
+                
+                // Load existing bots when dashboard is shown
+                if (pageId === 'dashboard') {
+                    loadExistingBots();
+                }
+            }
+        }
+
+        /** Load existing bots for the dashboard */
+        async function loadExistingBots() {
+            try {
+                // In a real implementation, we would fetch from the backend
+                // For now, we'll use localStorage to simulate persistence
+                const savedBots = localStorage.getItem('existingBots');
+                if (savedBots) {
+                    state.existingBots = JSON.parse(savedBots);
+                    renderExistingBots();
+                }
+            } catch (error) {
+                console.error('Error loading existing bots:', error);
+            }
+        }
+
+        /** Save a bot to the existing bots list */
+        function saveBotToDashboard(botData) {
+            // Check if bot already exists
+            const existingIndex = state.existingBots.findIndex(bot => bot.id === botData.id);
+            
+            if (existingIndex >= 0) {
+                // Update existing bot
+                state.existingBots[existingIndex] = {...state.existingBots[existingIndex], ...botData};
+            } else {
+                // Add new bot
+                state.existingBots.push(botData);
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+            renderExistingBots();
+        }
+
+        /** Render existing bots in the dashboard */
+        function renderExistingBots() {
+            const container = document.getElementById('existing-bots-container');
+            if (!container) return;
+
+            if (state.existingBots.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full text-center py-8">
+                        <i data-lucide="bot" class="w-12 h-12 text-gray-500 mx-auto mb-4"></i>
+                        <p class="text-gray-400">No bots created yet. Create your first bot to get started!</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = state.existingBots.map(bot => `
+                <div class="bot-card step-card p-6 rounded-xl shadow-lg transition-all duration-300">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">${bot.name}</h3>
+                            <p class="text-sm text-gray-400">ID: ${bot.id} | Type: ${bot.type}</p>
+                            <p class="text-xs text-gray-500 mt-1">Created: ${new Date(bot.createdAt || Date.now()).toLocaleDateString()}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="editBot('${bot.id}')" class="p-2 text-gray-400 hover:text-primary rounded-md" title="Edit Bot">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteBot('${bot.id}')" class="p-2 text-gray-400 hover:text-red-500 rounded-md" title="Delete Bot">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Status:</span>
+                            <span class="px-2 py-1 text-xs rounded-full ${bot.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
+                                ${bot.status || 'Active'}
+                            </span>
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-300">Knowledge Base:</span>
+                            <span class="text-sm text-gray-400">${bot.documentsCount || 0} documents</span>
+                        </div>
+                        
+                        <div class="pt-3 border-t border-gray-600">
+                            <button onclick="quickUpdateKB('${bot.id}', '${bot.type}')" class="w-full bg-primary/20 text-primary hover:bg-primary/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150 mb-2">
+                                Update Knowledge Base
+                            </button>
+                            ${bot.type === 'website' ? `
+                                <button onclick="quickGenerateCode('${bot.id}')" class="w-full bg-accent/20 text-accent hover:bg-accent/30 py-2 px-3 rounded-lg text-sm font-medium transition duration-150">
+                                    Generate Integration Code
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+
+        /** Quick update knowledge base for an existing bot */
+        async function quickUpdateKB(botId, platform) {
+            // In a real implementation, this would open a modal or navigate to the specific section
+            // For now, we'll simulate the process
+            showToast(`Opening knowledge base update for ${platform} bot ${botId}...`, 'info');
+            
+            // Navigate to the appropriate setup page
+            if (platform === 'website') {
+                showPage('website_setup', 'website');
+                // In a real app, we would load the bot data and pre-fill the form
+            } else {
+                showPage('whatsapp_setup', 'whatsapp');
+                // In a real app, we would load the bot data and pre-fill the form
+            }
+        }
+
+        /** Quick generate integration code for an existing website bot */
+        async function quickGenerateCode(botId) {
+            // In a real implementation, this would open the integration code section
+            showToast(`Opening integration code generation for bot ${botId}...`, 'info');
+            showPage('website_setup', 'website');
+            // In a real app, we would load the bot data and pre-fill the form
+        }
+
+        /** Edit an existing bot */
+        function editBot(botId) {
+            const bot = state.existingBots.find(b => b.id === botId);
+            if (bot) {
+                showToast(`Editing ${bot.name}...`, 'info');
+                if (bot.type === 'website') {
+                    showPage('website_setup', 'website');
+                } else {
+                    showPage('whatsapp_setup', 'whatsapp');
+                }
+                // In a real app, we would load the bot data into the form
+            }
+        }
+
+        /** Delete an existing bot */
+        function deleteBot(botId) {
+            if (confirm('Are you sure you want to delete this bot? This action cannot be undone.')) {
+                state.existingBots = state.existingBots.filter(bot => bot.id !== botId);
+                localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                renderExistingBots();
+                showToast('Bot deleted successfully', 'success');
+            }
+        }
+
+        /** Main function to fetch all bots and populate dashboard (simplified for frontend demo). */
+        // In a real app, we'd have a /bots endpoint to list all. Here, we skip for simplicity.
+        function initDashboard() {
+            showPage('dashboard');
+            loadExistingBots();
+        }
+
+        // --- Core API Handlers ---
+
+        /** Step 1: Create a new Bot (Website or WhatsApp) */
+        async function createBot(platform) {
+            // Prevent any default form submission
+            event.preventDefault();
+            
+            let name, fallback, access_token;
+
+            if (platform === 'website') {
+                name = document.getElementById('bot_name_input').value.trim();
+                fallback = document.getElementById('fallback_response_input').value.trim();
+                access_token = null;
+            } else {
+                name = document.getElementById('whatsapp_bot_name_input').value.trim();
+                fallback = document.getElementById('whatsapp_fallback_response_input').value.trim();
+                access_token = document.getElementById('whatsapp_access_token_input').value.trim();
+            }
+
+            if (!name) {
+                return showToast('Bot name is required.', 'error');
+            }
+
+            const toast = showToast(`Creating ${platform} bot...`, 'loading');
+
+            const payload = { 
+                name: name, 
+                fallback_response: fallback || "Sorry, I don't know the answer to that."
+            };
+
+            try {
+                let endpoint;
+                if (platform === 'website') {
+                    endpoint = `${API_HOST}/bots/website/create-bot`;
+                } else {
+                    endpoint = `${API_HOST}/bots/whatsapp/create-bot`;
+                    // For WhatsApp, we need to pass access_token as part of the request body
+                    payload.access_token = access_token;
+                }
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update state with bot details
+                state.bot.id = data.bot_id;
+                state.bot.name = name;
+                state.bot.fallbackResponse = fallback;
+                
+                if (platform === 'website') {
+                    state.bot.apiKey = data.api_key;
+                    state.bot.accessToken = null;
+                } else {
+                    state.bot.accessToken = access_token;
+                    state.bot.apiKey = null;
+                }
+
+                // Save to dashboard
+                saveBotToDashboard({
+                    id: data.bot_id,
+                    name: name,
+                    type: platform,
+                    status: 'active',
+                    createdAt: new Date().toISOString(),
+                    documentsCount: 0
+                });
+
+                // Update UI
+                renderBotHeader();
+                
+                // Enable next steps
+                document.querySelectorAll('.needs-bot-id').forEach(el => {
+                    el.classList.remove('hidden');
+                });
+
+                toast.update(`Successfully created ${name} (ID: ${data.bot_id})! Proceed to the next step.`, 'success');
+
+            } catch (error) {
+                console.error('Bot creation failed:', error);
+                toast.update(`Failed to create bot. Error: ${error.message}`, 'error');
+            }
+            
+            return false; // Additional prevention
+        }
+
+        /** Step 2 (Website/WhatsApp): Upload documents or URL to knowledge base. */
+        async function uploadKnowledgeBase() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            let url, files;
+            if (state.platform === 'website') {
+                url = document.getElementById('kb_url_input').value.trim();
+                files = document.getElementById('kb_file_input').files;
+            } else {
+                url = document.getElementById('whatsapp_kb_url_input').value.trim();
+                files = document.getElementById('whatsapp_kb_file_input').files;
+            }
+
+            if (!url && files.length === 0) {
+                return showToast('Please provide a website URL or select files to upload.', 'error');
+            }
+
+            const toast = showToast('Uploading knowledge base...', 'loading');
+            const formData = new FormData();
+            
+            if (url) {
+                formData.append('website_url', url);
+            }
+            if (files.length > 0) {
+                for (const file of files) {
+                    formData.append('files', file);
+                }
+            }
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/${state.platform}/${state.bot.id}/upload_docs`, {
+                    method: 'POST',
+                    body: formData // Fetch handles Content-Type automatically with FormData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Update bot in dashboard with new document count
+                const botIndex = state.existingBots.findIndex(bot => bot.id === state.bot.id);
+                if (botIndex >= 0) {
+                    state.existingBots[botIndex].documentsCount = (state.existingBots[botIndex].documentsCount || 0) + data.sources.length;
+                    localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                    renderExistingBots();
+                }
+                
+                toast.update(`Knowledge base updated! ${data.message}`, 'success');
+                
+                // Clear inputs
+                if (state.platform === 'website') {
+                    document.getElementById('kb_url_input').value = '';
+                    document.getElementById('kb_file_input').value = '';
+                } else {
+                    document.getElementById('whatsapp_kb_url_input').value = '';
+                    document.getElementById('whatsapp_kb_file_input').value = '';
+                }
+
+            } catch (error) {
+                console.error('Upload failed:', error);
+                toast.update(`Failed to upload documents. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 3 (Website/WhatsApp): Update the bot's fallback response. */
+        async function updateFallbackResponse() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            let newFallback;
+            if (state.platform === 'website') {
+                newFallback = document.getElementById('fallback_update_input').value.trim();
+            } else {
+                newFallback = document.getElementById('whatsapp_fallback_update_input').value.trim();
+            }
+
+            if (!newFallback) {
+                return showToast('Fallback response cannot be empty.', 'error');
+            }
+            if (newFallback === state.bot.fallbackResponse) {
+                return showToast('Fallback response is already set to this value.', 'info');
+            }
+
+            const toast = showToast('Updating fallback response...', 'loading');
+            const url = `${API_HOST}/bots/${state.platform}/${state.bot.id}/fallback`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fallback_response: newFallback })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                state.bot.fallbackResponse = data.fallback_response;
+                toast.update('Fallback response updated successfully!', 'success');
+
+            } catch (error) {
+                console.error('Fallback update failed:', error);
+                toast.update(`Failed to update fallback. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 4 (Website Only): Generate integration code. */
+        async function generateIntegrationCode() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a website bot first.', 'error');
+            }
+            
+            const websiteUrl = document.getElementById('integration_url_input').value.trim();
+            const outputDiv = document.getElementById('integration_code_output');
+
+            if (!websiteUrl) {
+                return showToast('Please enter the website URL for integration analysis.', 'error');
+            }
+
+            const toast = showToast('Analyzing website and generating code...', 'loading');
+            outputDiv.innerHTML = '<div class="flex items-center justify-center p-8"><div class="loading-animation w-8 h-8 border-4 border-primary border-solid rounded-full"></div><span class="ml-3 text-gray-400">Analyzing website...</span></div>';
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/${state.bot.id}/generate_integration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ website_url: websiteUrl })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                console.log('Backend response:', data); // Debug log
+                
+                // Success case - framework-specific code
+                toast.update('Integration code generated!', 'success');
+
+                // SAFE ACCESS: Check if data exists before using
+                const framework = data.framework || 'HTML/CSS/JS';
+                const integrationType = data.integration_type || 'frontend';
+                const instructions = data.instructions || 'Paste this code in your application.';
+                const integrationCode = data.integration_code || '// No integration code generated';
+
+                outputDiv.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-700 rounded-lg">
+                            <p class="text-sm font-medium text-accent mb-2">Detected Framework: <span class="text-white">${framework}</span></p>
+                            <p class="text-sm font-medium text-accent mb-1">Integration Type:</p>
+                            <p class="text-sm text-white">${integrationType}</p>
+                            <p class="text-sm font-medium text-accent mb-1 mt-3">Instructions:</p>
+                            <p class="text-sm text-white">${instructions}</p>
+                        </div>
+                        
+                        <div class="code-container">
+                            <div class="code-header">
+                                <span class="code-language">${framework} Integration Code</span>
+                                <button onclick="copyText(this.nextElementSibling.querySelector('code').textContent); return false;" class="p-2 text-gray-400 hover:text-white rounded-md bg-gray-700/50" title="Copy code">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <pre class="code-content language-javascript"><code>${integrationCode}</code></pre>
+                        </div>
+                    </div>
+                `;
+                
+                // Apply syntax highlighting
+                Prism.highlightAllUnder(outputDiv);
+                lucide.createIcons();
+
+            } catch (error) {
+                console.error('Integration generation failed:', error);
+                outputDiv.innerHTML = `
+                    <div class="p-4 bg-red-900/20 border border-red-700 rounded-lg">
+                        <p class="text-red-400 font-medium">Failed to generate integration code</p>
+                        <p class="text-red-300 text-sm mt-1">Error: ${error.message}</p>
+                        <p class="text-gray-400 text-xs mt-2">Check the browser console for more details.</p>
+                    </div>
+                `;
+                toast.update(`Failed to generate code: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        /** Step 5: Test the chatbot with enhanced functionality */
+        async function testChat() {
+            event.preventDefault();
+            
+            if (state.bot.id === null) {
+                return showToast('Please create a bot first.', 'error');
+            }
+
+            const messageInput = document.getElementById('chat_message_input');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                return showToast('Please enter a message to send.', 'error');
+            }
+
+            // Add user message to chat history
+            state.chatHistory.push({ type: 'user', content: message });
+            renderChatHistory();
+            
+            // Clear input
+            messageInput.value = '';
+
+            const toast = showToast('Processing your message...', 'loading');
+
+            try {
+                // For website bots, we need to include the API key in headers
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+
+                if (state.platform === 'website') {
+                    headers['api-key'] = state.bot.apiKey;
+                }
+
+                const response = await fetch(`${API_HOST}/bots/${state.platform}/${state.bot.id}/chat`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Add bot response to chat history
+                state.chatHistory.push({ type: 'bot', content: data.bot_response });
+                renderChatHistory();
+                
+                toast.update('Response received!', 'success');
+
+            } catch (error) {
+                console.error('Chat failed:', error);
+                state.chatHistory.push({ type: 'bot', content: 'Error: Failed to get response from bot.' });
+                renderChatHistory();
+                toast.update(`Failed to get response. Error: ${error.message}`, 'error');
+            }
+        }
+
+        /** Render chat history in the chat interface */
+        function renderChatHistory() {
+            const chatContainer = document.getElementById('chat_container');
+            if (!chatContainer) return;
+
+            if (state.chatHistory.length === 0) {
+                chatContainer.innerHTML = `
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="message-square" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p>Start a conversation with your bot</p>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            chatContainer.innerHTML = state.chatHistory.map(msg => `
+                <div class="chat-message ${msg.type === 'user' ? 'user-message' : 'bot-message'}">
+                    <div class="flex items-start space-x-2">
+                        <div class="flex-shrink-0">
+                            ${msg.type === 'user' ? 
+                                '<i data-lucide="user" class="w-4 h-4"></i>' : 
+                                '<i data-lucide="bot" class="w-4 h-4"></i>'
+                            }
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm">${msg.content}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Scroll to bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            lucide.createIcons();
+        }
+
+        /** Clear chat history */
+        function clearChatHistory() {
+            state.chatHistory = [];
+            renderChatHistory();
+            showToast('Chat history cleared', 'info');
+        }
+
+        /** Regenerate API key for website bot */
+        async function regenerateApiKey() {
+            if (state.bot.id === null || state.platform !== 'website') {
+                return showToast('This feature is only available for website bots.', 'error');
+            }
+
+            if (!confirm('Are you sure you want to regenerate the API key? This will invalidate the current key.')) {
+                return;
+            }
+
+            const toast = showToast('Regenerating API key...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/${state.bot.id}/regenerate_api_key`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+
+                const data = await response.json();
+                state.bot.apiKey = data.new_api_key;
+                renderBotHeader();
+                
+                toast.update('API key regenerated successfully!', 'success');
+
+            } catch (error) {
+                console.error('API key regeneration failed:', error);
+                toast.update(`Failed to regenerate API key. Error: ${error.message}`, 'error');
+            }
+        }
+
+        /** Step 1 (WhatsApp Only): Start the Meta OAuth flow. */
+        async function startWhatsAppOAuth() {
+            event.preventDefault();
+            
+            const toast = showToast('Initiating WhatsApp API connection...', 'loading');
+            
+            // NOTE: Since the current environment lacks a real 'user_id', we use a placeholder.
+            const userId = 'canvas_user_123'; 
+
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/oauth/start?user_id=${userId}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `Server returned status ${response.status}`);
+                }
+                const data = await response.json();
+                
+                toast.update('Redirecting to Meta for authentication...', 'info');
+                // In a real browser, this would redirect the user. 
+                // We'll simulate the next step since redirection is blocked in this environment.
+                
+                // window.location.href = data.oauth_url; 
+                
+                // Simulate success and show next step
+                state.isAuthenticated = true;
+                document.getElementById('whatsapp-oauth-step').classList.add('opacity-50', 'pointer-events-none');
+                document.getElementById('whatsapp-creation-step').classList.remove('hidden');
+                document.getElementById('whatsapp-creation-step').classList.add('active');
+
+                toast.update('Simulated Meta OAuth Success! Proceed to Bot Creation.', 'success');
+                
+            } catch (error) {
+                console.error('OAuth initiation failed:', error);
+                toast.update(`Failed to start OAuth. Error: ${error.message}`, 'error');
+            }
+            
+            return false;
+        }
+
+        // --- Event Listeners and Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initDashboard();
+            lucide.createIcons(); // Initialize all icons on load
+        });
+    </script>
+
+    <!-- TOAST Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- MAIN APPLICATION CONTAINER -->
+    <div class="max-w-7xl mx-auto bg-dark-bg rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700">
+
+        <!-- Header and Navigation -->
+        <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 border-gray-700">
+            <h1 class="text-3xl font-extrabold text-white">Bot Deployment Console</h1>
+            <nav class="mt-4 sm:mt-0 space-x-2 flex">
+                <button onclick="showPage('dashboard')" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-600 transition duration-150 shadow-md">
+                    Dashboard
+                </button>
+                <button onclick="showPage('website_setup', 'website')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                    Website Bot
+                </button>
+                <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
+                    WhatsApp Bot
+                </button>
+            </nav>
+        </header>
+
+        <!-- Bot Details Header (Top Right Slot) -->
+        <div id="bot-details-header" class="w-full p-4 mb-8 bg-gray-800 rounded-xl shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <!-- Content injected by renderBotHeader() -->
+            <p class="text-xl font-bold text-gray-300">Unassigned Bot</p>
+            <p class="text-sm text-gray-400 mt-2 sm:mt-0">Bot ID: N/A | Status: Not Created</p>
+        </div>
+
+
+        <!-- 1. DASHBOARD VIEW -->
+        <section id="dashboard" class="page-content active">
+            <h2 class="text-2xl font-semibold text-white mb-6">Welcome to the Bot Manager</h2>
+            
+            <!-- Quick Actions -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="step-card p-6 rounded-xl shadow-lg hover:shadow-primary/50 transition duration-300">
+                    <i data-lucide="globe" class="w-8 h-8 text-primary mb-3"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Deploy a Website Chatbot</h3>
+                    <p class="text-gray-400 mb-4">Integrate an AI knowledge base directly into your web application to answer customer questions 24/7.</p>
+                    <button onclick="showPage('website_setup', 'website')" class="w-full bg-primary text-white py-2 rounded-lg hover:bg-indigo-600 transition duration-150">Start Website Bot Setup</button>
+                </div>
+                <div class="step-card p-6 rounded-xl shadow-lg hover:shadow-accent/50 transition duration-300">
+                    <i data-lucide="message-square" class="w-8 h-8 text-accent mb-3"></i>
+                    <h3 class="text-xl font-bold text-white mb-2">Deploy a WhatsApp Bot</h3>
+                    <p class="text-gray-400 mb-4">Connect your AI knowledge base to the WhatsApp Business API for instant, personalized messaging.</p>
+                    <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="w-full bg-accent text-dark-bg py-2 rounded-lg hover:bg-green-500 transition duration-150">Start WhatsApp Bot Setup</button>
+                </div>
+            </div>
+
+            <!-- Existing Bots Section -->
+            <div class="mt-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-semibold text-white">Your Chatbots</h2>
+                    <div class="text-sm text-gray-400">
+                        <span id="bot-count">${state.existingBots.length}</span> bot(s) created
+                    </div>
+                </div>
+                
+                <div id="existing-bots-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Dynamic content will be injected here by renderExistingBots() -->
+                    <div class="col-span-full text-center py-8">
+                        <i data-lucide="bot" class="w-12 h-12 text-gray-500 mx-auto mb-4"></i>
+                        <p class="text-gray-400">No bots created yet. Create your first bot to get started!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. WEBSITE BOT SETUP VIEW -->
+        <section id="website_setup" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">Website Bot Setup Flow</h2>
+
+            <!-- Step 1: Bot Creation -->
+            <div class="step-card p-6 rounded-xl mb-6">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">1</span> Create Website Bot</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Bot Name:</span>
+                        <input type="text" id="bot_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="e.g., SupportBot-v1">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Initial Fallback Response (if no answer found):</span>
+                        <input type="text" id="fallback_response_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" value="Sorry, I don't know the answer to that." placeholder="e.g., Please contact support at...">
+                    </label>
+                    <button onclick="createBot('website'); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Create Bot & Get API Key
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Knowledge Base Upload -->
+            <div class="step-card p-6 rounded-xl mb-6 needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">2</span> Upload Knowledge Base (Files or URL)</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Website URL (for crawling):</span>
+                        <input type="url" id="kb_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="https://yourcompany.com/docs">
+                    </label>
+                    <div class="text-gray-400 text-center">-- OR --</div>
+                    <label class="block">
+                        <span class="text-gray-300">Upload Documents (.pdf, .txt, .docx, .csv, .xlsx):</span>
+                        <input type="file" id="kb_file_input" multiple class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-indigo-600">
+                    </label>
+                    <button onclick="uploadKnowledgeBase(); return false;" class="w-full bg-accent text-dark-bg py-3 rounded-lg hover:bg-green-500 transition duration-150 font-bold">
+                        Process & Upload Docs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Update Fallback Response -->
+            <div class="step-card p-6 rounded-xl mb-6 needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">3</span> Update Custom Fallback Response</h3>
+                <p class="text-sm text-gray-400 mb-3">Customize the response when the knowledge base cannot find a relevant answer.</p>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                    <input type="text" id="fallback_update_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="Enter new fallback response...">
+                    <button onclick="updateFallbackResponse(); return false;" class="bg-secondary text-white py-3 px-6 rounded-lg hover:bg-blue-500 transition duration-150 font-bold">
+                        Update
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Generate Integration Code -->
+            <div class="step-card p-6 rounded-xl mb-6 needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">4</span> Generate Integration Code</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Your Website URL (for framework analysis):</span>
+                        <input type="url" id="integration_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="https://www.my-app.com">
+                    </label>
+                    <button onclick="generateIntegrationCode(); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Generate Code Snippet
+                    </button>
+                    <div id="integration_code_output" class="mt-4 p-4 bg-gray-800 rounded-lg min-h-[200px] flex items-center justify-center">
+                        <p class="text-gray-400">Enter URL above and click generate.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Test Enhanced Chatbot -->
+            <div class="step-card p-6 rounded-xl needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-primary text-white w-8 h-8 flex items-center justify-center rounded-full mr-3">5</span> Test Enhanced Chatbot</h3>
+                <p class="text-sm text-gray-400 mb-4">Test your bot with the enhanced LLM-powered responses that use intent analysis and contextual retrieval.</p>
+                
+                <div class="chat-container bg-gray-800 rounded-lg p-4 mb-4" id="chat_container" style="height: 300px; overflow-y: auto;">
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="text-center">
+                            <i data-lucide="message-square" class="w-12 h-12 mx-auto mb-2"></i>
+                            <p>Start a conversation with your bot</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <input type="text" id="chat_message_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-primary focus:border-primary" placeholder="Type your message here..." onkeypress="if(event.key === 'Enter') testChat()">
+                    <button onclick="testChat(); return false;" class="bg-primary text-white py-3 px-6 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Send
+                    </button>
+                    <button onclick="clearChatHistory(); return false;" class="bg-gray-600 text-white py-3 px-6 rounded-lg hover:bg-gray-700 transition duration-150 font-bold" title="Clear chat history">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 3. WHATSAPP BOT SETUP VIEW -->
+        <section id="whatsapp_setup" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">WhatsApp Bot Setup Flow</h2>
+
+            <!-- Step 1: WhatsApp API Application (OAuth) -->
+            <div id="whatsapp-oauth-step" class="step-card p-6 rounded-xl mb-6 transition-opacity duration-300">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">1</span> Apply for WhatsApp Business API</h3>
+                <p class="text-gray-400 mb-4">You need to connect your Meta/Facebook account to receive an Access Token for API communication.</p>
+                <button onclick="startWhatsAppOAuth(); return false;" class="w-full bg-accent text-dark-bg py-3 rounded-lg hover:bg-green-500 transition duration-150 font-bold">
+                    Start Meta / WhatsApp OAuth
+                </button>
+            </div>
+
+            <!-- Step 2: Bot Creation -->
+            <div id="whatsapp-creation-step" class="step-card p-6 rounded-xl mb-6 hidden needs-bot-id transition-opacity duration-300">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">2</span> Create WhatsApp Bot Instance</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Bot Name:</span>
+                        <input type="text" id="whatsapp_bot_name_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="e.g., WhatsApp-Support">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Meta Access Token (from Step 1):</span>
+                        <input type="text" id="whatsapp_access_token_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="Paste your generated access token here...">
+                    </label>
+                    <label class="block">
+                        <span class="text-gray-300">Initial Fallback Response (if no answer found):</span>
+                        <input type="text" id="whatsapp_fallback_response_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" value="Sorry, I don't know the answer to that." placeholder="e.g., Please contact support at...">
+                    </label>
+                    <button onclick="createBot('whatsapp'); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Create WhatsApp Bot
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Knowledge Base Upload -->
+            <div class="step-card p-6 rounded-xl mb-6 needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">3</span> Upload Knowledge Base (Files or URL)</h3>
+                <div class="space-y-4">
+                    <label class="block">
+                        <span class="text-gray-300">Website URL (for crawling):</span>
+                        <input type="url" id="whatsapp_kb_url_input" class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="https://yourcompany.com/faqs">
+                    </label>
+                    <div class="text-gray-400 text-center">-- OR --</div>
+                    <label class="block">
+                        <span class="text-gray-300">Upload Documents (.pdf, .txt, .docx, .csv, .xlsx):</span>
+                        <input type="file" id="whatsapp_kb_file_input" multiple class="w-full p-3 mt-1 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent file:text-dark-bg hover:file:bg-green-500">
+                    </label>
+                    <button onclick="uploadKnowledgeBase(); return false;" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                        Process & Upload Docs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Update Fallback Response -->
+            <div class="step-card p-6 rounded-xl needs-bot-id hidden">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center"><span class="bg-accent text-dark-bg w-8 h-8 flex items-center justify-center rounded-full mr-3">4</span> Update Custom Fallback Response</h3>
+                <p class="text-sm text-gray-400 mb-3">Customize the response when the knowledge base cannot find a relevant answer.</p>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                    <input type="text" id="whatsapp_fallback_update_input" class="flex-grow p-3 bg-gray-700 text-white border border-gray-600 rounded-lg focus:ring-accent focus:border-accent" placeholder="Enter new fallback response...">
+                    <button onclick="updateFallbackResponse(); return false;" class="bg-secondary text-white py-3 px-6 rounded-lg hover:bg-blue-500 transition duration-150 font-bold">
+                        Update
+                    </button>
+                </div>
+            </div>
+            
+        </section>
+
+    </div>
+</body>
+</html>
