@@ -1,16 +1,23 @@
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyd
-*.dll
-
-# Node
+Ignore node_modules
 node_modules/
 
-# Env
+# Ignore logs
+logs/
+*.log
+
+# Ignore environment files
 .env
 
-# OS
+# Ignore OS generated files
 .DS_Store
 Thumbs.db
+
+# Ignore build output
+dist/
+build/
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
