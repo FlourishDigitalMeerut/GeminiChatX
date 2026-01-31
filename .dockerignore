@@ -28,8 +28,7 @@ node_modules/
 .idea/
 
 # Media (optional – include only if needed)
-*.mp4
-*.gif
+
 
 # Local databases (optional – uncomment if you want fresh DB per container)
 # bots.db
