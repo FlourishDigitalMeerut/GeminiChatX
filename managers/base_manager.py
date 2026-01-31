@@ -6,7 +6,8 @@ class BaseManager:
         self.model_class = model_class
         self.instance_class = instance_class
         self._instances = {}
-        self._load_existing_instances()
+        # Lazy loading: Don't load all instances on startup
+        # self._load_existing_instances()
 
     def _load_existing_instances(self):
         with Session(engine) as s:
@@ -14,6 +15,12 @@ class BaseManager:
                 self._instances[m.id] = self.instance_class(m)
 
     def get(self, bot_id: int):
+        # Lazy loading: Load instance only when needed
+        if bot_id not in self._instances:
+            with Session(engine) as s:
+                m = s.get(self.model_class, bot_id)
+                if m:
+                    self._instances[bot_id] = self.instance_class(m)
         return self._instances.get(bot_id)
 
     def create(self, **kwargs):

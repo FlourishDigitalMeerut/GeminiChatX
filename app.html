@@ -189,7 +189,7 @@
     <!-- Global State & Configuration -->
     <script>
         // Set the backend host URL
-        const API_HOST = "http://127.0.0.1:8000/api/v1";
+        const API_HOST = "http://127.0.0.1:8000";
 
         const state = {
             platform: null, // 'website' or 'whatsapp' or 'voice'
@@ -204,7 +204,23 @@
                 welcomeMessage: "Hello! This is your AI assistant calling. How can I help you today?"
             },
             isAuthenticated: false,
-            currentView: 'dashboard',
+            currentView: 'login',
+            resetPasswordSession: {
+                sessionToken: null,
+                email: null
+            },
+            user: {
+                id: null,
+                email: null,
+                username: null,
+                accessToken: null,
+                apiKeys: {
+                    website_key: null,
+                    whatsapp_key: null,
+                    voice_key: null,
+                    virtual_numbers_key: null
+                }
+            },
             existingBots: [],
             chatHistory: [],
             callAnalytics: [],
@@ -294,6 +310,432 @@
             }
         }
 
+        // --- Authentication Functions ---
+
+        /** Check if user is authenticated on page load */
+        function checkAuth() {
+            const userData = localStorage.getItem('geminiChatX_user');
+            if (userData) {
+                try {
+                    const user = JSON.parse(userData);
+                    state.user = user;
+                    state.isAuthenticated = true;
+                    
+                    // Load existing bots from localStorage (not from backend on every page load)
+                    console.log('checkAuth: Loading bots from localStorage');
+                    loadExistingBots();
+                    
+                    showPage('dashboard');
+                } catch (e) {
+                    console.error('checkAuth error:', e);
+                    localStorage.removeItem('geminiChatX_user');
+                    showPage('login');
+                }
+            } else {
+                showPage('login');
+            }
+        }
+
+        /** Handle user login */
+        async function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('login_email').value.trim();
+            const password = document.getElementById('login_password').value;
+
+            if (!email || !password) {
+                return showToast('Please enter both email and password', 'error');
+            }
+
+            const toast = showToast('Logging in...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Login failed');
+                }
+
+                const data = await response.json();
+                
+                // Store user data and API keys
+                state.user = {
+                    id: data.user_id,
+                    email: data.email,
+                    accessToken: data.access_token,
+                    refreshToken: data.refresh_token,
+                    expiresIn: data.expires_in,
+                    apiKeys: {
+                        website_key: data.api_keys.website_key,
+                        whatsapp_key: data.api_keys.whatsapp_key,
+                        voice_key: data.api_keys.voice_key,
+                        virtual_numbers_key: data.api_keys.virtual_numbers_key,
+                        expires_at: data.api_keys.expires_at
+                    }
+                };
+                state.isAuthenticated = true;
+
+                // Save to localStorage
+                localStorage.setItem('geminiChatX_user', JSON.stringify(state.user));
+
+                toast.update('Login successful!', 'success');
+                showPage('dashboard');
+
+            } catch (error) {
+                console.error('Login error:', error);
+                toast.update(error.message || 'Login failed', 'error');
+            }
+        }
+
+        /** Handle user signup */
+        async function handleSignup(event) {
+            event.preventDefault();
+            const username = document.getElementById('signup_username').value.trim();
+            const email = document.getElementById('signup_email').value.trim();
+            const mobile = document.getElementById('signup_mobile').value.trim();
+            const password = document.getElementById('signup_password').value;
+            const confirmPassword = document.getElementById('signup_confirm_password').value;
+
+            if (!username || !email || !mobile || !password) {
+                return showToast('All fields are required', 'error');
+            }
+
+            if (password !== confirmPassword) {
+                return showToast('Passwords do not match', 'error');
+            }
+
+            const toast = showToast('Creating account...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/auth/signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        username, 
+                        email, 
+                        mobile_number: mobile, 
+                        password 
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Signup failed');
+                }
+
+                toast.update('Account created! Please login.', 'success');
+                showPage('login');
+
+            } catch (error) {
+                console.error('Signup error:', error);
+                toast.update(error.message || 'Signup failed', 'error');
+            }
+        }
+
+        /** Handle user logout */
+        async function handleLogout() {
+            const refreshToken = state.user.refreshToken;
+            
+            // Call logout API
+            try {
+                const response = await fetch(`${API_HOST}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ refresh_token: refreshToken || null })
+                });
+                
+                if (!response.ok) {
+                    console.error('Logout API failed');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
+            // Clear local state regardless of API result
+            localStorage.removeItem('geminiChatX_user');
+            state.user = {
+                id: null,
+                email: null,
+                username: null,
+                accessToken: null,
+                apiKeys: {
+                    website_key: null,
+                    whatsapp_key: null,
+                    voice_key: null,
+                    virtual_numbers_key: null
+                }
+            };
+            state.isAuthenticated = false;
+            state.existingBots = [];
+            showToast('Logged out successfully', 'info');
+            showPage('login');
+        }
+
+        /** Refresh access token */
+        async function refreshAccessToken() {
+            try {
+                const response = await fetch(`${API_HOST}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: state.user.refreshToken })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Token refresh failed');
+                }
+
+                const data = await response.json();
+                state.user.accessToken = data.access_token;
+                state.user.expiresIn = data.expires_in;
+                localStorage.setItem('geminiChatX_user', JSON.stringify(state.user));
+                
+                return data.access_token;
+            } catch (error) {
+                console.error('Token refresh error:', error);
+                handleLogout();
+                return null;
+            }
+        }
+
+        /** Get user profile */
+        async function getUserProfile() {
+            try {
+                const response = await fetch(`${API_HOST}/auth/user-detail`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch user profile');
+                }
+
+                const userData = await response.json();
+                showToast(`Welcome ${userData.username}!`, 'info');
+                return userData;
+            } catch (error) {
+                console.error('Failed to get user profile:', error);
+                return null;
+            }
+        }
+
+        /** Handle forgot password - Step 1: Send OTP */
+        async function handleForgotPassword(event) {
+            event.preventDefault();
+            const email = document.getElementById('forgot_email').value.trim();
+            
+            if (!email) {
+                return showToast('Email is required', 'error');
+            }
+
+            const toast = showToast('Sending OTP to your email...', 'loading');
+
+            try {
+                console.log('Sending forgot password request for:', email);
+                const response = await fetch(`${API_HOST}/auth/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to send OTP');
+                }
+
+                // Save session token
+                state.resetPasswordSession = {
+                    sessionToken: data.session_token,
+                    email: email
+                };
+                
+                console.log('Session token saved:', state.resetPasswordSession.sessionToken);
+
+                // Show development OTP if available
+                if (data.development_otp) {
+                    console.log('🔑 DEVELOPMENT OTP:', data.development_otp);
+                    toast.update(`OTP sent! Development OTP: ${data.development_otp}`, 'success');
+                } else {
+                    toast.update('OTP sent to your email!', 'success');
+                }
+                
+                // Transition to OTP page after showing message
+                setTimeout(() => {
+                    showPage('verify_otp');
+                }, 1000);
+
+            } catch (error) {
+                console.error('Forgot password error:', error);
+                toast.update(error.message || 'Failed to send OTP', 'error');
+            }
+        }
+
+        /** Handle verify OTP - Step 2 */
+        async function handleVerifyOTP(event) {
+            event.preventDefault();
+            const otp = document.getElementById('otp_input').value.trim();
+            
+            if (!otp || otp.length !== 6) {
+                return showToast('Please enter a valid 6-digit OTP', 'error');
+            }
+
+            if (!state.resetPasswordSession || !state.resetPasswordSession.sessionToken) {
+                return showToast('Session expired. Please start forgot password again.', 'error');
+            }
+
+            const toast = showToast('Verifying OTP...', 'loading');
+
+            try {
+                console.log('Verifying OTP:', otp);
+                console.log('Session token:', state.resetPasswordSession.sessionToken);
+                
+                const response = await fetch(`${API_HOST}/auth/verify-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Token': state.resetPasswordSession.sessionToken
+                    },
+                    body: JSON.stringify({ otp })
+                });
+
+                const data = await response.json();
+                console.log('Verify OTP response:', data);
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Invalid OTP');
+                }
+
+                toast.update('OTP verified! Set your new password.', 'success');
+                showPage('reset_password');
+
+            } catch (error) {
+                console.error('OTP verification error:', error);
+                toast.update(error.message || 'OTP verification failed', 'error');
+            }
+        }
+
+        /** Resend OTP */
+        async function resendOTP() {
+            const toast = showToast('Resending OTP...', 'loading');
+
+            try {
+                const response = await fetch(`${API_HOST}/auth/resend-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Session-Token': state.resetPasswordSession.sessionToken
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to resend OTP');
+                }
+
+                toast.update('New OTP sent to your email!', 'success');
+
+            } catch (error) {
+                console.error('Resend OTP error:', error);
+                toast.update(error.message || 'Failed to resend OTP', 'error');
+            }
+        }
+
+        /** Handle reset password - Step 3 */
+        async function handleResetPassword(event) {
+            event.preventDefault();
+            const newPassword = document.getElementById('new_password').value;
+            const confirmPassword = document.getElementById('confirm_new_password').value;
+            
+            if (!newPassword || newPassword.length < 8) {
+                return showToast('Password must be at least 8 characters', 'error');
+            }
+
+            if (newPassword !== confirmPassword) {
+                return showToast('Passwords do not match', 'error');
+            }
+
+            if (!state.resetPasswordSession || !state.resetPasswordSession.sessionToken) {
+                showToast('Session expired. Please start forgot password again.', 'error');
+                showPage('forgot_password');
+                return;
+            }
+
+            const toast = showToast('Resetting password...', 'loading');
+
+            try {
+                console.log('Resetting password with session token:', state.resetPasswordSession.sessionToken);
+                
+                const response = await fetch(`${API_HOST}/auth/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Token': state.resetPasswordSession.sessionToken
+                    },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+
+                const data = await response.json();
+                console.log('Reset password response:', data);
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to reset password');
+                }
+
+                // Clear session
+                delete state.resetPasswordSession;
+                
+                // Clear form fields
+                document.getElementById('new_password').value = '';
+                document.getElementById('confirm_new_password').value = '';
+                
+                toast.update('Password reset successful! Redirecting to login...', 'success');
+                
+                // Redirect to login after 1.5 seconds
+                setTimeout(() => {
+                    showPage('login');
+                }, 1500);
+
+            } catch (error) {
+                console.error('Password reset error:', error);
+                toast.update(error.message || 'Password reset failed', 'error');
+            }
+        }
+
+        /** Get API key for current platform */
+        function getApiKey(platform) {
+            if (!state.user.apiKeys) return null;
+            if (platform === 'website') return state.user.apiKeys.website_key;
+            if (platform === 'whatsapp') return state.user.apiKeys.whatsapp_key;
+            if (platform === 'voice') return state.user.apiKeys.voice_key;
+            if (platform === 'virtual_numbers') return state.user.apiKeys.voice_key; // Plivo uses voice key
+            return null;
+        }
+
+        /** Get headers with authentication */
+        function getAuthHeaders(platform = null) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            const apiKey = platform ? getApiKey(platform) : null;
+            if (apiKey) {
+                headers['X-API-Key'] = apiKey;
+            }
+            
+            return headers;
+        }
+
         /** Renders the main bot header with ID and keys. */
         function renderBotHeader() {
             const header = document.getElementById('bot-details-header');
@@ -356,6 +798,13 @@
 
         /** Handles navigation between pages/views. */
         function showPage(pageId, platform = null) {
+            // Check authentication for protected pages (allow password recovery pages)
+            const publicPages = ['login', 'signup', 'forgot_password', 'verify_otp', 'reset_password'];
+            if (!publicPages.includes(pageId) && !state.isAuthenticated) {
+                showToast('Please login to continue', 'error');
+                pageId = 'login';
+            }
+
             document.querySelectorAll('.page-content').forEach(page => {
                 page.classList.remove('active');
             });
@@ -424,7 +873,14 @@
                 
                 // Load existing bots when dashboard is shown
                 if (pageId === 'dashboard') {
-                    loadExistingBots();
+                    // Only load if not already loaded to prevent duplicates
+                    if (state.existingBots.length === 0) {
+                        loadExistingBots();
+                    } else {
+                        // Just re-render and update count
+                        renderExistingBots();
+                        updateBotCount();
+                    }
                 }
             }
         }
@@ -467,10 +923,16 @@
                 const savedBots = localStorage.getItem('existingBots');
                 if (savedBots) {
                     state.existingBots = JSON.parse(savedBots);
-                    renderExistingBots();
+                    console.log('Loaded bots from localStorage:', state.existingBots.length, 'bots');
+                } else {
+                    state.existingBots = [];
+                    console.log('No bots found in localStorage');
                 }
+                renderExistingBots();
+                updateBotCount();
             } catch (error) {
                 console.error('Error loading existing bots:', error);
+                state.existingBots = [];
             }
         }
 
@@ -486,12 +948,16 @@
             
             localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
             renderExistingBots();
+            updateBotCount();
         }
 
         /** Render existing bots in the dashboard */
         function renderExistingBots() {
             const container = document.getElementById('existing-bots-container');
             if (!container) return;
+
+            // Update bot count
+            updateBotCount();
 
             if (state.existingBots.length === 0) {
                 container.innerHTML = `
@@ -624,12 +1090,69 @@
         }
 
         /** Delete an existing bot */
-        function deleteBot(botId) {
-            if (confirm('Are you sure you want to delete this bot? This action cannot be undone.')) {
-                state.existingBots = state.existingBots.filter(bot => bot.id !== botId);
+        async function deleteBot(botId) {
+            if (!confirm('Are you sure you want to delete this bot? This action cannot be undone.')) {
+                return;
+            }
+
+            const toast = showToast('Deleting bot...', 'loading');
+
+            try {
+                // Convert botId to string for comparison (in case of type mismatch)
+                const botIdStr = String(botId);
+                
+                // Find the bot to determine its type
+                const bot = state.existingBots.find(b => String(b.id) === botIdStr);
+                
+                if (!bot) {
+                    console.error('Bot not found. Available bots:', state.existingBots);
+                    console.error('Looking for botId:', botId);
+                    toast.update('Bot not found in list', 'error');
+                    return;
+                }
+
+                console.log('Deleting bot:', bot.name, 'ID:', botIdStr);
+                console.log('Before deletion - Total bots:', state.existingBots.length);
+                
+                // Remove from state array
+                state.existingBots = state.existingBots.filter(b => String(b.id) !== botIdStr);
+                
+                console.log('After deletion - Total bots:', state.existingBots.length);
+                
+                // Save to localStorage immediately
                 localStorage.setItem('existingBots', JSON.stringify(state.existingBots));
+                
+                // Verify it was saved
+                const verifyBots = JSON.parse(localStorage.getItem('existingBots') || '[]');
+                console.log('Verified in localStorage - Total bots:', verifyBots.length);
+                
+                // If this was the current bot, clear it
+                if (String(state.bot.id) === botIdStr) {
+                    state.bot = {
+                        id: null,
+                        name: "",
+                        companyName: "",
+                        apiKey: null
+                    };
+                }
+                
+                // Re-render dashboard and update count
                 renderExistingBots();
-                showToast('Bot deleted successfully', 'success');
+                updateBotCount();
+                
+                toast.update(`Bot deleted successfully. ${state.existingBots.length} bot(s) remaining.`, 'success');
+                
+            } catch (error) {
+                console.error('Failed to delete bot:', error);
+                toast.update('Failed to delete bot: ' + error.message, 'error');
+            }
+        }
+
+        /** Update bot count in dashboard */
+        function updateBotCount() {
+            const countElement = document.getElementById('bot-count');
+            if (countElement) {
+                countElement.textContent = state.existingBots.length;
             }
         }
 
@@ -724,7 +1247,7 @@
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(platform),
                     body: JSON.stringify(payload)
                 });
 
@@ -808,8 +1331,13 @@
             }
 
             try {
+                const headers = {};
+                const apiKey = getApiKey(state.platform);
+                if (apiKey) headers['X-API-Key'] = apiKey;
+                
                 const response = await fetch(`${API_HOST}/bots/${state.platform}/${state.bot.id}/upload_docs`, {
                     method: 'POST',
+                    headers: headers,
                     body: formData
                 });
 
@@ -878,7 +1406,7 @@
             try {
                 const response = await fetch(url, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders(state.platform),
                     body: JSON.stringify({ fallback_response: newFallback })
                 });
 
@@ -924,7 +1452,7 @@
             try {
                 const response = await fetch(`${API_HOST}/bots/website/${state.bot.id}/generate_integration`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders('website'),
                     body: JSON.stringify({ website_url: websiteUrl })
                 });
 
@@ -1115,7 +1643,8 @@
                     : `${API_HOST}/bots/voice/${state.bot.id}/regenerate_api_key`;
                 
                 const response = await fetch(endpoint, {
-                    method: 'POST'
+                    method: 'POST',
+                    headers: getAuthHeaders(state.platform)
                 });
 
                 if (!response.ok) {
@@ -1192,7 +1721,7 @@
             try {
                 const response = await fetch(`${API_HOST}/bots/voice/create-bot`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders('voice'),
                     body: JSON.stringify({
                         name: name,
                         company_name: companyName,
@@ -1270,8 +1799,13 @@
             }
 
             try {
+                const headers = {};
+                const apiKey = getApiKey('voice');
+                if (apiKey) headers['X-API-Key'] = apiKey;
+                
                 const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/upload_docs`, {
                     method: 'POST',
+                    headers: headers,
                     body: formData
                 });
 
@@ -1331,9 +1865,9 @@
             const toast = showToast('Configuring voice settings...', 'loading');
 
             try {
-                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/configure-voice`, {
+                const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/configure`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders('voice'),
                     body: JSON.stringify({
                         language: language,
                         voice_type: voiceType,
@@ -1397,7 +1931,7 @@
             try {
                 const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/test-call`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders('voice'),
                     body: JSON.stringify({
                         test_phone_number: testPhoneNumber,
                         test_message: testMessage
@@ -1477,7 +2011,7 @@
             try {
                 const response = await fetch(`${API_HOST}/bots/voice/${state.bot.id}/bulk-call`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getAuthHeaders('voice'),
                     body: JSON.stringify({
                         recipients: recipientData
                     })
@@ -1716,9 +2250,708 @@
             document.getElementById('excel_upload_section').classList.toggle('hidden', method !== 'excel');
         }
 
+        // ==================== NEW API INTEGRATIONS ====================
+
+        // --- Voice Bot Management APIs ---
+
+        /** Get supported languages */
+        async function getSupportedLanguages() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/supported-languages`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch languages');
+                
+                const data = await response.json();
+                state.supportedLanguages = data.languages || data;
+                return data;
+            } catch (error) {
+                console.error('Failed to get supported languages:', error);
+                return null;
+            }
+        }
+
+        /** Get available voice types */
+        async function getVoiceTypes() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/voice-types`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch voice types');
+                
+                const data = await response.json();
+                state.voiceTypes = data.voice_types || data;
+                return data;
+            } catch (error) {
+                console.error('Failed to get voice types:', error);
+                return null;
+            }
+        }
+
+        /** Get voice bot status */
+        async function getVoiceBotStatus(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${botId}/status`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch bot status');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get voice bot status:', error);
+                return null;
+            }
+        }
+
+        /** Get available Plivo numbers for voice bot */
+        async function getAvailableNumbers(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${botId}/available-numbers`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch available numbers');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get available numbers:', error);
+                return null;
+            }
+        }
+
+        /** Get number assignment status for voice bot */
+        async function getNumberStatus(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${botId}/number-status`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch number status');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get number status:', error);
+                return null;
+            }
+        }
+
+        /** Get all user's voice bots */
+        async function getMyVoiceBots() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/my-bots`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('voice')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch voice bots');
+                
+                const data = await response.json();
+                return data.bots || data;
+            } catch (error) {
+                console.error('Failed to get voice bots:', error);
+                return [];
+            }
+        }
+
+        /** Preview voice settings */
+        async function previewVoice(botId, language, voiceType, sampleText) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/voice/${botId}/preview-voice`, {
+                    method: 'POST',
+                    headers: getAuthHeaders('voice'),
+                    body: JSON.stringify({
+                        language,
+                        voice_type: voiceType,
+                        sample_text: sampleText || "Hello, this is a voice preview."
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to preview voice');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to preview voice:', error);
+                showToast('Failed to preview voice', 'error');
+                return null;
+            }
+        }
+
+        // --- Website Bot Management APIs ---
+
+        /** Get website bot status */
+        async function getWebsiteBotStatus(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/${botId}/status`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('website')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch bot status');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get website bot status:', error);
+                return null;
+            }
+        }
+
+        /** Get website bot API key */
+        async function getWebsiteBotApiKey(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/${botId}/api_key`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('website')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch API key');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get website bot API key:', error);
+                return null;
+            }
+        }
+
+        /** Get all user's website bots */
+        async function getMyWebsiteBots() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/website/my-bots`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('website')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch website bots');
+                
+                const data = await response.json();
+                return data.bots || data;
+            } catch (error) {
+                console.error('Failed to get website bots:', error);
+                return [];
+            }
+        }
+
+        // --- WhatsApp Bot Management APIs ---
+
+        /** Upload documents to WhatsApp bot */
+        async function uploadWhatsAppDocs(botId, files, websiteUrl) {
+            try {
+                const formData = new FormData();
+                
+                if (websiteUrl) {
+                    formData.append('website_url', websiteUrl);
+                }
+                if (files && files.length > 0) {
+                    for (const file of files) {
+                        formData.append('files', file);
+                    }
+                }
+
+                const headers = {};
+                const apiKey = getApiKey('whatsapp');
+                if (apiKey) headers['X-API-Key'] = apiKey;
+
+                const response = await fetch(`${API_HOST}/bots/whatsapp/${botId}/upload_docs`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Upload failed');
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Failed to upload WhatsApp docs:', error);
+                showToast('Failed to upload documents', 'error');
+                return null;
+            }
+        }
+
+        /** Get WhatsApp bot status */
+        async function getWhatsAppBotStatus(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/${botId}/status`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('whatsapp')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch bot status');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get WhatsApp bot status:', error);
+                return null;
+            }
+        }
+
+        /** Toggle WhatsApp bot active/inactive */
+        async function toggleWhatsAppBotActive(botId) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/${botId}/toggle-active`, {
+                    method: 'POST',
+                    headers: getAuthHeaders('whatsapp')
+                });
+
+                if (!response.ok) throw new Error('Failed to toggle bot status');
+                
+                const data = await response.json();
+                showToast(data.message || 'Bot status updated', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to toggle WhatsApp bot:', error);
+                showToast('Failed to toggle bot status', 'error');
+                return null;
+            }
+        }
+
+        /** Get all user's WhatsApp bots */
+        async function getMyWhatsAppBots() {
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/my-bots`, {
+                    method: 'GET',
+                    headers: getAuthHeaders('whatsapp')
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch WhatsApp bots');
+                
+                const data = await response.json();
+                return data.bots || data;
+            } catch (error) {
+                console.error('Failed to get WhatsApp bots:', error);
+                return [];
+            }
+        }
+
+        /** Test WhatsApp bot chat */
+        async function testWhatsAppChat(botId, testMessage) {
+            try {
+                const response = await fetch(`${API_HOST}/bots/whatsapp/${botId}/test-chat`, {
+                    method: 'POST',
+                    headers: getAuthHeaders('whatsapp'),
+                    body: JSON.stringify({ message: testMessage })
+                });
+
+                if (!response.ok) throw new Error('Failed to test chat');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to test WhatsApp chat:', error);
+                showToast('Failed to test chat', 'error');
+                return null;
+            }
+        }
+
+        // --- Plivo Number Management APIs ---
+
+        /** Search available Plivo numbers */
+        async function searchPlivoNumbers(countryIso, numberType, pattern) {
+            try {
+                const apiKey = getApiKey('voice');
+                if (!apiKey) {
+                    showToast('Please generate a Voice API key first in API Keys section', 'error');
+                    return null;
+                }
+
+                const params = new URLSearchParams({
+                    country_iso: countryIso || 'US',
+                    type: numberType || 'local'
+                });
+                if (pattern) params.append('pattern', pattern);
+
+                console.log('Searching Plivo numbers:', { countryIso, numberType, pattern });
+
+                const response = await fetch(`${API_HOST}/plivo/numbers/search?${params}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'X-API-Key': apiKey
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Search failed:', errorData);
+                    throw new Error(errorData.detail || 'Failed to search numbers');
+                }
+                
+                const data = await response.json();
+                console.log('Search results:', data);
+                return data;
+            } catch (error) {
+                console.error('Failed to search Plivo numbers:', error);
+                showToast(error.message || 'Failed to search phone numbers', 'error');
+                return null;
+            }
+        }
+
+        /** Buy a Plivo number */
+        async function buyPlivoNumber(number, countryIso) {
+            try {
+                const apiKey = getApiKey('voice');
+                if (!apiKey) {
+                    showToast('Please generate a Voice API key first in API Keys section', 'error');
+                    return null;
+                }
+
+                console.log('Buying number:', number);
+
+                const response = await fetch(`${API_HOST}/plivo/numbers/buy`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        phone_number: number,  // Backend expects phone_number, not number
+                        alias: null
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to buy number');
+                }
+                
+                const data = await response.json();
+                console.log('Buy response:', data);
+                showToast('Number purchased successfully!', 'success');
+                
+                // Refresh the my numbers list
+                loadMyNumbers();
+                
+                return data;
+            } catch (error) {
+                console.error('Failed to buy Plivo number:', error);
+                showToast(error.message || 'Failed to purchase number', 'error');
+                return null;
+            }
+        }
+
+        /** Get user's Plivo numbers */
+        async function getMyPlivoNumbers() {
+            try {
+                const apiKey = getApiKey('voice');
+                if (!apiKey) {
+                    showToast('Please generate a Voice API key first in API Keys section', 'error');
+                    return null;
+                }
+
+                console.log('Loading my Plivo numbers...');
+
+                const response = await fetch(`${API_HOST}/plivo/numbers/my-numbers`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'X-API-Key': apiKey
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Failed to load numbers:', errorData);
+                    throw new Error(errorData.detail || 'Failed to fetch numbers');
+                }
+                
+                const data = await response.json();
+                console.log('My numbers:', data);
+                return data;
+            } catch (error) {
+                console.error('Failed to get Plivo numbers:', error);
+                showToast(error.message || 'Failed to load numbers', 'error');
+                return null;
+            }
+        }
+
+        /** Assign Plivo number to voice bot */
+        async function assignNumberToBot(numberId, botId) {
+            try {
+                const apiKey = getApiKey('voice');
+                if (!apiKey) {
+                    showToast('Please generate a Voice API key first', 'error');
+                    return null;
+                }
+
+                const response = await fetch(`${API_HOST}/plivo/numbers/assign-to-bot`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({
+                        number_id: numberId,
+                        bot_id: botId
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to assign number');
+                }
+                
+                const data = await response.json();
+                showToast('Number assigned to bot successfully!', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to assign number:', error);
+                showToast(error.message || 'Failed to assign number', 'error');
+                return null;
+            }
+        }
+
+        /** Release Plivo number from bot */
+        async function releaseNumberFromBot(numberId) {
+            try {
+                const response = await fetch(`${API_HOST}/plivo/numbers/release-from-bot`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-API-Key': getApiKey('voice')
+                    },
+                    body: JSON.stringify({ number_id: numberId })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to release number');
+                }
+                
+                const data = await response.json();
+                showToast('Number released from bot', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to release number:', error);
+                showToast(error.message || 'Failed to release number', 'error');
+                return null;
+            }
+        }
+
+        /** Set default Plivo number */
+        async function setDefaultNumber(numberId) {
+            try {
+                const response = await fetch(`${API_HOST}/plivo/numbers/set-default`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-API-Key': getApiKey('voice')
+                    },
+                    body: JSON.stringify({ number_id: numberId })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to set default number');
+                }
+                
+                const data = await response.json();
+                showToast('Default number set successfully!', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to set default number:', error);
+                showToast(error.message || 'Failed to set default number', 'error');
+                return null;
+            }
+        }
+
+        /** Update Plivo number settings */
+        async function updatePlivoNumber(numberId, updates) {
+            try {
+                const response = await fetch(`${API_HOST}/plivo/numbers/${numberId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-API-Key': getApiKey('voice')
+                    },
+                    body: JSON.stringify(updates)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to update number');
+                }
+                
+                const data = await response.json();
+                showToast('Number settings updated!', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to update number:', error);
+                showToast(error.message || 'Failed to update number', 'error');
+                return null;
+            }
+        }
+
+        /** Delete/release Plivo number */
+        async function deletePlivoNumber(numberId) {
+            try {
+                const response = await fetch(`${API_HOST}/plivo/numbers/${numberId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'X-API-Key': getApiKey('voice')
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to delete number');
+                }
+                
+                const data = await response.json();
+                showToast('Number released successfully!', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to delete number:', error);
+                showToast(error.message || 'Failed to delete number', 'error');
+                return null;
+            }
+        }
+
+        // --- API Key Management APIs ---
+
+        /** Generate all bot API keys */
+        async function generateAllApiKeys() {
+            try {
+                const response = await fetch(`${API_HOST}/api-keys/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to generate API keys');
+                
+                const data = await response.json();
+                
+                // Update state with new keys
+                state.user.apiKeys = {
+                    website_key: data.website_key,
+                    whatsapp_key: data.whatsapp_key,
+                    voice_key: data.voice_key,
+                    virtual_numbers_key: data.virtual_numbers_key,
+                    expires_at: data.expires_at
+                };
+                localStorage.setItem('geminiChatX_user', JSON.stringify(state.user));
+                
+                showToast('API keys generated successfully!', 'success');
+                return data;
+            } catch (error) {
+                console.error('Failed to generate API keys:', error);
+                showToast('Failed to generate API keys', 'error');
+                return null;
+            }
+        }
+
+        /** Get user's API keys */
+        async function getMyApiKeys() {
+            try {
+                const response = await fetch(`${API_HOST}/api-keys/my-keys`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch API keys');
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to get API keys:', error);
+                return null;
+            }
+        }
+
+        /** Revoke all user's API keys */
+        async function revokeAllApiKeys() {
+            if (!confirm('Are you sure you want to revoke all API keys? This will break all bot integrations.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_HOST}/api-keys/revoke-all`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${state.user.accessToken}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to revoke API keys');
+                
+                const data = await response.json();
+                showToast('All API keys revoked successfully!', 'success');
+                
+                // Clear local API keys
+                state.user.apiKeys = {
+                    website_key: null,
+                    whatsapp_key: null,
+                    voice_key: null,
+                    virtual_numbers_key: null
+                };
+                localStorage.setItem('geminiChatX_user', JSON.stringify(state.user));
+                
+                return data;
+            } catch (error) {
+                console.error('Failed to revoke API keys:', error);
+                showToast('Failed to revoke API keys', 'error');
+                return null;
+            }
+        }
+
+        /** Load all user's bots for dashboard */
+        async function loadAllUserBots() {
+            const toast = showToast('Loading your bots from server...', 'loading');
+            
+            try {
+                const [websiteBots, whatsappBots, voiceBots] = await Promise.all([
+                    getMyWebsiteBots(),
+                    getMyWhatsAppBots(),
+                    getMyVoiceBots()
+                ]);
+
+                const allBots = [
+                    ...(websiteBots || []).map(bot => ({ ...bot, type: 'website' })),
+                    ...(whatsappBots || []).map(bot => ({ ...bot, type: 'whatsapp' })),
+                    ...(voiceBots || []).map(bot => ({ ...bot, type: 'voice' }))
+                ];
+
+                // Replace localStorage with backend data
+                state.existingBots = allBots;
+                localStorage.setItem('existingBots', JSON.stringify(allBots));
+                renderExistingBots();
+                
+                toast.update(`Loaded ${allBots.length} bot(s) from server`, 'success');
+            } catch (error) {
+                console.error('Failed to load bots:', error);
+                toast.update('Failed to load bots from server', 'error');
+            }
+        }
+
         // --- Event Listeners and Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            initDashboard();
+            checkAuth(); // Check authentication on page load
             lucide.createIcons(); // Initialize all icons on load
         });
     </script>
@@ -1730,22 +2963,38 @@
     <div class="max-w-7xl mx-auto bg-dark-bg rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700">
 
         <!-- Header and Navigation -->
-        <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 border-gray-700">
-            <h1 class="text-3xl font-extrabold text-white">Bot Deployment Console</h1>
-            <nav class="mt-4 sm:mt-0 space-x-2 flex">
-                <button onclick="showPage('dashboard')" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-600 transition duration-150 shadow-md">
-                    Dashboard
-                </button>
-                <button onclick="showPage('website_setup', 'website')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
-                    Website Bot
-                </button>
-                <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
-                    WhatsApp Bot
-                </button>
-                <button onclick="showPage('voice_setup', 'voice')" class="px-4 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">
-                    Voice Bot
-                </button>
-            </nav>
+        <header class="mb-8 border-b pb-4 border-gray-700">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div class="flex items-center space-x-3">
+                    <a href="index.html" class="text-gray-400 hover:text-purple-400 transition" title="Back to Home">
+                        <i data-lucide="home" class="w-6 h-6"></i>
+                    </a>
+                    <h1 class="text-3xl font-extrabold text-white whitespace-nowrap">Bot Deployment Console</h1>
+                </div>
+                <nav class="flex flex-wrap gap-2 items-center">
+                    <button onclick="showPage('dashboard')" class="px-3 py-2 bg-primary text-white rounded-lg hover:bg-indigo-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        Dashboard
+                    </button>
+                    <button onclick="showPage('website_setup', 'website')" class="px-3 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        Website
+                    </button>
+                    <button onclick="showPage('whatsapp_setup', 'whatsapp')" class="px-3 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        WhatsApp
+                    </button>
+                    <button onclick="showPage('voice_setup', 'voice')" class="px-3 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        Voice
+                    </button>
+                    <button onclick="showPage('plivo_numbers')" class="px-3 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        <i data-lucide="phone-call" class="w-4 h-4 inline-block"></i>
+                    </button>
+                    <button onclick="showPage('user_profile')" class="px-3 py-2 bg-card-bg text-gray-300 rounded-lg hover:bg-gray-600 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        <i data-lucide="user" class="w-4 h-4 inline-block"></i>
+                    </button>
+                    <button onclick="handleLogout()" class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-150 shadow-md text-sm whitespace-nowrap">
+                        <i data-lucide="log-out" class="w-4 h-4 inline-block"></i>
+                    </button>
+                </nav>
+            </div>
         </header>
 
         <!-- Bot Details Header (Top Right Slot) -->
@@ -1756,8 +3005,227 @@
         </div>
 
 
+        <!-- 0. LOGIN VIEW -->
+        <section id="login" class="page-content active">
+            <div class="max-w-md mx-auto mt-16">
+                <div class="step-card p-8 rounded-xl shadow-2xl">
+                    <div class="text-center mb-8">
+                        <i data-lucide="bot" class="w-16 h-16 text-primary mx-auto mb-4"></i>
+                        <h2 class="text-3xl font-bold text-white mb-2">GeminiChatX</h2>
+                        <p class="text-gray-400">Sign in to manage your AI chatbots</p>
+                    </div>
+
+                    <form onsubmit="handleLogin(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                                <input type="email" id="login_email" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150"
+                                    placeholder="your@email.com">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                                <input type="password" id="login_password" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-transparent transition duration-150"
+                                    placeholder="••••••••">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-medium">
+                                Login
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-4 text-center">
+                        <button onclick="showPage('forgot_password')" class="text-blue-400 hover:text-blue-300 text-sm font-medium">
+                            Forgot Password?
+                        </button>
+                    </div>
+
+                    <div class="mt-4 text-center">
+                        <p class="text-gray-400">Don't have an account?
+                            <button onclick="showPage('signup')" class="text-primary hover:text-indigo-400 font-medium">Sign up</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 0.5 SIGNUP VIEW -->
+        <section id="signup" class="page-content">
+            <div class="max-w-md mx-auto mt-16">
+                <div class="step-card p-8 rounded-xl shadow-2xl">
+                    <div class="text-center mb-8">
+                        <i data-lucide="user-plus" class="w-16 h-16 text-accent mx-auto mb-4"></i>
+                        <h2 class="text-3xl font-bold text-white mb-2">Create Account</h2>
+                        <p class="text-gray-400">Join GeminiChatX and start building AI chatbots</p>
+                    </div>
+
+                    <form onsubmit="handleSignup(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                                <input type="text" id="signup_username" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-accent focus:border-transparent transition duration-150"
+                                    placeholder="johndoe">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                                <input type="email" id="signup_email" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-accent focus:border-transparent transition duration-150"
+                                    placeholder="your@email.com">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Mobile Number</label>
+                                <input type="tel" id="signup_mobile" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-accent focus:border-transparent transition duration-150"
+                                    placeholder="+1234567890">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Password</label>
+                                <input type="password" id="signup_password" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-accent focus:border-transparent transition duration-150"
+                                    placeholder="••••••••">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
+                                <input type="password" id="signup_confirm_password" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-accent focus:border-transparent transition duration-150"
+                                    placeholder="••••••••">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-accent text-dark-bg py-3 rounded-lg hover:bg-green-500 transition duration-150 font-medium">
+                                Create Account
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <p class="text-gray-400">Already have an account?
+                            <button onclick="showPage('login')" class="text-primary hover:text-indigo-400 font-medium">Login</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 0.6 FORGOT PASSWORD VIEW -->
+        <section id="forgot_password" class="page-content">
+            <div class="max-w-md mx-auto mt-16">
+                <div class="step-card p-8 rounded-xl shadow-2xl">
+                    <div class="text-center mb-8">
+                        <i data-lucide="lock" class="w-16 h-16 text-blue-500 mx-auto mb-4"></i>
+                        <h2 class="text-3xl font-bold text-white mb-2">Reset Password</h2>
+                        <p class="text-gray-400">Enter your email to receive an OTP</p>
+                    </div>
+
+                    <form onsubmit="handleForgotPassword(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                                <input type="email" id="forgot_email" required
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-150"
+                                    placeholder="your@email.com">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition duration-150 font-medium">
+                                Send OTP
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <button onclick="showPage('login')" class="text-primary hover:text-indigo-400 font-medium">Back to Login</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 0.7 VERIFY OTP VIEW -->
+        <section id="verify_otp" class="page-content">
+            <div class="max-w-md mx-auto mt-16">
+                <div class="step-card p-8 rounded-xl shadow-2xl">
+                    <div class="text-center mb-8">
+                        <i data-lucide="shield-check" class="w-16 h-16 text-green-500 mx-auto mb-4"></i>
+                        <h2 class="text-3xl font-bold text-white mb-2">Verify OTP</h2>
+                        <p class="text-gray-400">Enter the 6-digit code sent to your email</p>
+                    </div>
+
+                    <form onsubmit="handleVerifyOTP(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">OTP Code</label>
+                                <input type="text" id="otp_input" required maxlength="6" pattern="[0-9]{6}"
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white text-center text-2xl tracking-widest focus:ring-2 focus:ring-green-500 focus:border-transparent transition duration-150"
+                                    placeholder="000000">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition duration-150 font-medium">
+                                Verify OTP
+                            </button>
+
+                            <button type="button" onclick="resendOTP()"
+                                class="w-full bg-gray-600 text-white py-2 rounded-lg hover:bg-gray-700 transition duration-150 font-medium text-sm">
+                                Resend OTP
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <button onclick="showPage('forgot_password')" class="text-primary hover:text-indigo-400 font-medium text-sm">Back</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 0.8 RESET PASSWORD VIEW -->
+        <section id="reset_password" class="page-content">
+            <div class="max-w-md mx-auto mt-16">
+                <div class="step-card p-8 rounded-xl shadow-2xl">
+                    <div class="text-center mb-8">
+                        <i data-lucide="key" class="w-16 h-16 text-purple-500 mx-auto mb-4"></i>
+                        <h2 class="text-3xl font-bold text-white mb-2">Set New Password</h2>
+                        <p class="text-gray-400">Choose a strong password for your account</p>
+                    </div>
+
+                    <form onsubmit="handleResetPassword(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                                <input type="password" id="new_password" required minlength="8"
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-150"
+                                    placeholder="••••••••">
+                                <p class="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
+                                <input type="password" id="confirm_new_password" required minlength="8"
+                                    class="w-full p-3 bg-dark-bg border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-150"
+                                    placeholder="••••••••">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-purple-500 text-white py-3 rounded-lg hover:bg-purple-600 transition duration-150 font-medium">
+                                Reset Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
         <!-- 1. DASHBOARD VIEW -->
-        <section id="dashboard" class="page-content active">
+        <section id="dashboard" class="page-content">
             <h2 class="text-2xl font-semibold text-white mb-6">Welcome to the Bot Manager</h2>
             
             <!-- Quick Actions -->
@@ -1787,7 +3255,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-semibold text-white">Your Chatbots</h2>
                     <div class="text-sm text-gray-400">
-                        <span id="bot-count">${state.existingBots.length}</span> bot(s) created
+                        <span id="bot-count">0</span> bot(s) created
                     </div>
                 </div>
                 
@@ -2223,6 +3691,302 @@ Jane Smith, +919876543211'></textarea>
             
         </section>
 
+        <!-- PLIVO NUMBER MANAGEMENT VIEW -->
+        <section id="plivo_numbers" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">Plivo Number Management</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Search & Buy Numbers -->
+                <div class="step-card p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                        <i data-lucide="search" class="w-6 h-6 mr-2 text-blue-500"></i>
+                        Search & Buy Numbers
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Country</label>
+                                <select id="search_country" class="w-full p-3 bg-gray-700 text-white border border-gray-600 rounded-lg">
+                                    <option value="US">United States</option>
+                                    <option value="GB">United Kingdom</option>
+                                    <option value="CA">Canada</option>
+                                    <option value="AU">Australia</option>
+                                    <option value="IN">India</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                                <select id="search_type" class="w-full p-3 bg-gray-700 text-white border border-gray-600 rounded-lg">
+                                    <option value="local">Local</option>
+                                    <option value="tollfree">Toll-Free</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Pattern (optional)</label>
+                            <input type="text" id="search_pattern" placeholder="e.g., 555" class="w-full p-3 bg-gray-700 text-white border border-gray-600 rounded-lg">
+                        </div>
+                        
+                        <button onclick="searchAndDisplayNumbers()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-150 font-bold">
+                            <i data-lucide="search" class="w-4 h-4 inline-block mr-2"></i>
+                            Search Numbers
+                        </button>
+                        
+                        <div id="search_results" class="mt-4 max-h-64 overflow-y-auto space-y-2">
+                            <!-- Search results will appear here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- My Numbers -->
+                <div class="step-card p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                        <i data-lucide="phone" class="w-6 h-6 mr-2 text-green-500"></i>
+                        My Numbers
+                    </h3>
+                    
+                    <button onclick="loadMyNumbers()" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition duration-150 font-bold mb-4">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 inline-block mr-2"></i>
+                        Load My Numbers
+                    </button>
+                    
+                    <div id="my_numbers_container" class="space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-center py-8 text-gray-400">
+                            <i data-lucide="phone-off" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                            <p>No numbers found. Search and buy numbers to get started.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- USER PROFILE VIEW -->
+        <section id="user_profile" class="page-content">
+            <h2 class="text-2xl font-semibold text-white mb-6">User Profile & Settings</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Profile Information -->
+                <div class="step-card p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                        <i data-lucide="user-circle" class="w-6 h-6 mr-2 text-primary"></i>
+                        Profile Information
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">User ID</label>
+                            <input type="text" id="profile_user_id" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg cursor-not-allowed">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                            <input type="email" id="profile_email" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg cursor-not-allowed">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                            <input type="text" id="profile_username" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg cursor-not-allowed">
+                        </div>
+                        
+                        <button onclick="loadUserProfile()" class="w-full bg-primary text-white py-3 rounded-lg hover:bg-indigo-600 transition duration-150 font-bold">
+                            <i data-lucide="refresh-cw" class="w-4 h-4 inline-block mr-2"></i>
+                            Refresh Profile
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- API Keys Management -->
+                <div class="step-card p-6 rounded-xl">
+                    <h3 class="text-xl font-bold text-white mb-4 flex items-center">
+                        <i data-lucide="key" class="w-6 h-6 mr-2 text-yellow-500"></i>
+                        API Keys Management
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Website Bot Key</label>
+                            <input type="password" id="profile_website_key" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">WhatsApp Bot Key</label>
+                            <input type="password" id="profile_whatsapp_key" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Voice Bot Key</label>
+                            <input type="password" id="profile_voice_key" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg font-mono text-sm">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Virtual Numbers Key</label>
+                            <input type="password" id="profile_virtual_numbers_key" readonly class="w-full p-3 bg-gray-700 text-gray-400 border border-gray-600 rounded-lg font-mono text-sm">
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="generateAllApiKeys()" class="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition duration-150 font-bold">
+                                <i data-lucide="key" class="w-4 h-4 inline-block mr-2"></i>
+                                Generate New Keys
+                            </button>
+                            
+                            <button onclick="revokeAllApiKeys()" class="flex-1 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition duration-150 font-bold">
+                                <i data-lucide="trash-2" class="w-4 h-4 inline-block mr-2"></i>
+                                Revoke All
+                            </button>
+                        </div>
+                        
+                        <p class="text-xs text-gray-500 mt-2">
+                            <i data-lucide="info" class="w-3 h-3 inline-block mr-1"></i>
+                            Revoking keys will break all bot integrations
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div>
+
+    <script>
+        // Helper functions for new pages
+        
+        async function searchAndDisplayNumbers() {
+            const country = document.getElementById('search_country').value;
+            const type = document.getElementById('search_type').value;
+            const pattern = document.getElementById('search_pattern').value.trim();
+            
+            const toast = showToast('Searching available numbers...', 'loading');
+            const data = await searchPlivoNumbers(country, type, pattern);
+            
+            if (!data) {
+                // Error already shown by searchPlivoNumbers
+                document.getElementById('search_results').innerHTML = `
+                    <div class="text-center py-4 text-red-400">
+                        <p>Failed to search numbers. Check console for details.</p>
+                    </div>
+                `;
+                toast.update('Search failed', 'error');
+                return;
+            }
+            
+            // Backend returns 'numbers' array, not 'objects'
+            const numbers = data.numbers || [];
+            
+            if (numbers.length === 0) {
+                document.getElementById('search_results').innerHTML = `
+                    <div class="text-center py-4 text-gray-400">
+                        <p>No numbers found. Try different search criteria.</p>
+                    </div>
+                `;
+                toast.update('No numbers found', 'info');
+                return;
+            }
+            
+            const results = numbers.slice(0, 10); // Show first 10
+            document.getElementById('search_results').innerHTML = results.map(num => `
+                <div class="p-3 bg-gray-700 rounded-lg flex justify-between items-center">
+                    <div>
+                        <p class="text-white font-mono">${num.number || num.phone_number}</p>
+                        <p class="text-xs text-gray-400">${num.region || num.city || 'N/A'} - $${num.rental_rate || num.monthly_rental_rate || 'N/A'}/mo</p>
+                    </div>
+                    <button onclick="buyPlivoNumber('${num.number || num.phone_number}', '${country}')" 
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm">
+                        Buy
+                    </button>
+                </div>
+            `).join('');
+            
+            toast.update(`Found ${results.length} numbers`, 'success');
+            lucide.createIcons();
+        }
+        
+        async function loadMyNumbers() {
+            const toast = showToast('Loading your numbers...', 'loading');
+            const data = await getMyPlivoNumbers();
+            
+            if (!data) {
+                // Error already shown by getMyPlivoNumbers
+                document.getElementById('my_numbers_container').innerHTML = `
+                    <div class="text-center py-8 text-red-400">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>Failed to load numbers. Check if you have a Voice API key.</p>
+                    </div>
+                `;
+                toast.update('Load failed', 'error');
+                lucide.createIcons();
+                return;
+            }
+            
+            if (!data.numbers || data.numbers.length === 0) {
+                document.getElementById('my_numbers_container').innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        <i data-lucide="phone-off" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                        <p>No numbers found. Search and buy numbers to get started.</p>
+                    </div>
+                `;
+                toast.update('No numbers found', 'info');
+                lucide.createIcons();
+                return;
+            }
+            
+            document.getElementById('my_numbers_container').innerHTML = data.numbers.map(num => `
+                <div class="p-4 bg-gray-700 rounded-lg">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="text-white font-mono font-bold">${num.number}</p>
+                            <p class="text-xs text-gray-400">${num.alias || 'No alias'}</p>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded ${num.is_default ? 'bg-green-600' : 'bg-gray-600'} text-white">
+                            ${num.is_default ? 'Default' : 'Active'}
+                        </span>
+                    </div>
+                    ${num.assigned_bot_id ? `<p class="text-xs text-blue-400 mb-2">Assigned to: ${num.assigned_bot_id}</p>` : ''}
+                    <div class="flex space-x-2 mt-3">
+                        ${!num.is_default ? `<button onclick="setDefaultNumber('${num._id}')" class="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs">Set Default</button>` : ''}
+                        ${num.assigned_bot_id ? `<button onclick="releaseNumberFromBot('${num._id}')" class="flex-1 px-3 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-xs">Release</button>` : ''}
+                        <button onclick="deletePlivoNumber('${num._id}')" class="flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-xs">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            toast.update(`Loaded ${data.numbers.length} number(s)`, 'success');
+            lucide.createIcons();
+        }
+        
+        async function loadUserProfile() {
+            const toast = showToast('Loading profile...', 'loading');
+            const userData = await getUserProfile();
+            
+            if (userData) {
+                document.getElementById('profile_user_id').value = userData._id || state.user.id || 'N/A';
+                document.getElementById('profile_email').value = userData.email || state.user.email || 'N/A';
+                document.getElementById('profile_username').value = userData.username || 'N/A';
+                
+                // Update API keys display
+                document.getElementById('profile_website_key').value = state.user.apiKeys?.website_key || 'Not generated';
+                document.getElementById('profile_whatsapp_key').value = state.user.apiKeys?.whatsapp_key || 'Not generated';
+                document.getElementById('profile_voice_key').value = state.user.apiKeys?.voice_key || 'Not generated';
+                document.getElementById('profile_virtual_numbers_key').value = state.user.apiKeys?.virtual_numbers_key || 'Not generated';
+                
+                toast.update('Profile loaded!', 'success');
+            } else {
+                // Load from state if API fails
+                document.getElementById('profile_user_id').value = state.user.id || 'N/A';
+                document.getElementById('profile_email').value = state.user.email || 'N/A';
+                document.getElementById('profile_username').value = 'N/A';
+                
+                document.getElementById('profile_website_key').value = state.user.apiKeys?.website_key || 'Not generated';
+                document.getElementById('profile_whatsapp_key').value = state.user.apiKeys?.whatsapp_key || 'Not generated';
+                document.getElementById('profile_voice_key').value = state.user.apiKeys?.voice_key || 'Not generated';
+                document.getElementById('profile_virtual_numbers_key').value = state.user.apiKeys?.virtual_numbers_key || 'Not generated';
+                
+                toast.update('Loaded from local cache', 'info');
+            }
+        }
+    </script>
+</body>
+</html>
 </body>
 </html>

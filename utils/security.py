@@ -13,9 +13,8 @@ logger = logging.getLogger(__name__)
 # ==========================
 # Password hashing setup
 # ==========================
-# Bcrypt (default) or optionally argon2
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-MAX_BCRYPT_LENGTH = 72  # Bcrypt max password length in bytes
+# Using argon2 instead of bcrypt to avoid compatibility issues
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # ==========================
 # API Key Utilities
@@ -31,28 +30,16 @@ def validate_api_key(api_key: str) -> bool:
 # ==========================
 # Password Utilities
 # ==========================
-def truncate_password(password: str) -> str:
-    """
-    Truncate password safely to MAX_BCRYPT_LENGTH characters.
-    Avoids bcrypt limitations.
-    """
-    return password[:MAX_BCRYPT_LENGTH]
-
+# ==========================
+# Password Utilities
+# ==========================
 def get_password_hash(password: str) -> str:
-    """
-    Hash the password with bcrypt.
-    Truncate to 72 characters to avoid bcrypt limitation.
-    """
-    safe_pw = truncate_password(password)
-    return pwd_context.hash(safe_pw)
+    """Hash the password with argon2."""
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    Verify a plain password against a hashed password.
-    Truncate to 72 characters before verifying.
-    """
-    safe_pw = truncate_password(plain_password)
-    return pwd_context.verify(safe_pw, hashed_password)
+    """Verify a plain password against a hashed password."""
+    return pwd_context.verify(plain_password, hashed_password)
 
 # ==========================
 # JWT Utilities

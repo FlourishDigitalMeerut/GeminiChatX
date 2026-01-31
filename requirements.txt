@@ -7,6 +7,7 @@ langchain-community
 langchain-text-splitters
 langchain-groq
 langchain-classic
+langchain-chroma
 groq
 transformers
 torch
@@ -17,7 +18,10 @@ playwright
 pymupdf
 docx2txt
 python-multipart
-python-multipart
 pydantic[email]
 aiosmtplib
-python-dotenv
+motor
+plivo
+python-jose[cryptography]
+passlib[bcrypt]
+pymongo

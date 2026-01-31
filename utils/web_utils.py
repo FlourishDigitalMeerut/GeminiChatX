@@ -1,7 +1,6 @@
 import requests
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup
-from langchain_community.document_loaders import PlaywrightURLLoader
 from langchain_core.documents import Document
 
 def valid_url(url: str) -> bool:
@@ -12,16 +11,12 @@ def valid_url(url: str) -> bool:
         return False
 
 def fetch_website_html(url: str):
+    # Try simple requests first, skip Playwright to avoid segmentation faults
     try:
-        loader = PlaywrightURLLoader(urls=[url])
-        docs = loader.load()
-        return docs[0].page_content
+        r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
+        return BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
     except Exception:
-        try:
-            r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
-            return BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True)
-        except Exception:
-            return None
+        return None
 
 def crawl_links(start_url, limit=10):
     """Crawl a website and return internal links up to a limit."""

@@ -169,11 +169,20 @@ async def get_current_user_from_api_key(x_api_key: str = Header(None, alias="X-A
     )
 
 async def validate_virtual_numbers_api_key(api_key: str = Header(..., alias="X-API-Key")):
-    """Validate Virtual numbers-scoped API key"""
+    """Validate Virtual numbers-scoped API key (also accepts voice API keys)"""
     try:
+        # Try virtual_numbers key first
         user_info = api_key_service.validate_api_key(api_key, "virtual_numbers")
         return user_info
     except HTTPException:
-        raise
+        # Fall back to voice key (Plivo operations use voice API keys)
+        try:
+            user_info = api_key_service.validate_api_key(api_key, "voice")
+            return user_info
+        except HTTPException:
+            raise HTTPException(
+                status_code=401, 
+                detail="Invalid API key. Please use a Voice API key for Plivo number management."
+            )
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid number API key: {str(e)}")
